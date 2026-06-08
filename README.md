@@ -13,6 +13,7 @@ This repository includes:
 ```
 frontend/    # Vite React app
 backend/     # FastAPI service
+requirements.txt  # Root dependency bridge for Railway/Nixpacks
 ```
 
 ## Prerequisites
