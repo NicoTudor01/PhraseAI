@@ -14,6 +14,7 @@ This repository includes:
 frontend/    # Vite React app
 backend/     # FastAPI service
 requirements.txt  # Root dependency bridge for Railway/Nixpacks
+nixpacks.toml  # Forces Railway build to Python backend in monorepo
 ```
 
 ## Prerequisites
