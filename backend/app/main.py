@@ -421,6 +421,17 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/")
+def root() -> dict:
+    return {
+        "service": "PhraseAI API",
+        "status": "ok",
+        "message": "This is the backend API. Deploy frontend separately on Vercel.",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 @app.post("/rewrite", response_model=RewriteResponse)
 def rewrite_email(payload: RewriteRequest) -> RewriteResponse:
     model_name = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
