@@ -98,7 +98,11 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## Supabase Table
 
-Run the SQL in `backend/sql/style_profiles.sql`:
+Run the SQL in:
+- `backend/sql/style_profiles.sql`
+- `backend/sql/learning_events.sql`
+
+### style_profiles
 
 ```sql
 create table if not exists public.style_profiles (
@@ -108,12 +112,37 @@ create table if not exists public.style_profiles (
 );
 ```
 
+### learning_events
+
+```sql
+create table if not exists public.learning_events (
+	id bigserial primary key,
+	user_id text not null,
+	mode text not null,
+	source text not null default 'manual',
+	draft text not null,
+	ai_output text not null,
+	final_version text not null,
+	signals jsonb not null default '{}'::jsonb,
+	persona_snapshot jsonb not null default '{}'::jsonb,
+	created_at timestamptz not null default now()
+);
+```
+
 ## API Endpoints
 
 - `POST /rewrite`
 	- Input: `{ draft, mode, user_id }`
 	- mode: `more_professional` | `sound_smarter` | `fix_grammar`
-	- Returns rewritten email using Claude
+	- Returns rewritten email using Claude/OpenRouter
+- `POST /learn`
+	- Input: `{ user_id, mode, draft, ai_output, final_version }`
+	- Learns writing preferences from the user-edited final version and updates profile guidance
+- `POST /dev/stress-test`
+	- Input: `{ user_id, samples_per_phase }`
+	- Runs synthetic stress inputs (formal phase + conversational phase) and updates profile
+- `GET /learning-events/{user_id}?limit=25`
+	- Returns recent learning events with source, signals, and persona snapshot
 - `GET /profile/{user_id}`
 	- Returns style profile or empty object
 - `POST /profile/{user_id}`
@@ -122,8 +151,28 @@ create table if not exists public.style_profiles (
 ## Deploy
 
 - Frontend (Vercel):
+	- Root directory: `frontend`
 	- Build command: `npm run build`
 	- Output directory: `dist`
+	- Environment variable: `VITE_API_URL=https://<your-railway-domain>`
 - Backend (Railway):
-	- Start command uses `backend/Procfile`
-	- `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+	- Root directory: repository root (uses `railway.toml`)
+	- Start command from `railway.toml`: `cd backend && uvicorn app.main:app --host 0.0.0.0 --port ${PORT}`
+	- Required environment variables:
+		- `ANTHROPIC_API_KEY`
+		- `ANTHROPIC_BASE_URL` (optional)
+		- `LLM_MODEL` (optional)
+		- `LLM_MAX_TOKENS` (optional)
+		- `SUPABASE_URL`
+		- `SUPABASE_KEY`
+		- `FRONTEND_ORIGIN=https://<your-vercel-domain>`
+
+### Go-Live Checklist
+
+1. Run SQL in `backend/sql/style_profiles.sql` on Supabase.
+2. Deploy backend to Railway and set all backend env vars.
+3. Copy Railway public URL.
+4. Deploy frontend to Vercel with root directory `frontend`.
+5. Set `VITE_API_URL` in Vercel to the Railway URL and redeploy frontend.
+6. Update Railway `FRONTEND_ORIGIN` to your Vercel URL.
+7. Test: rewrite once, edit output, click `This is my final version`, then verify profile/history update.

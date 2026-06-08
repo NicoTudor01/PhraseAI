@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const USER_ID = "dev-user-1";
 const THEME_STORAGE_KEY = "phraseai-theme";
+const IS_DEV = import.meta.env.DEV;
 
 const MODES = [
   { key: "more_professional", label: "More Professional" },
@@ -138,10 +139,17 @@ function App() {
   const [contextText, setContextText] = useState("");
   const [mode, setMode] = useState("more_professional");
   const [rewritten, setRewritten] = useState("");
+  const [lastAiOutput, setLastAiOutput] = useState("");
   const [activeSection, setActiveSection] = useState("home");
   const [theme, setTheme] = useState("dark");
   const [loading, setLoading] = useState(false);
+  const [learning, setLearning] = useState(false);
   const [error, setError] = useState("");
+  const [learnMessage, setLearnMessage] = useState("");
+  const [stressMessage, setStressMessage] = useState("");
+  const [stressLoading, setStressLoading] = useState(false);
+  const [profile, setProfile] = useState({});
+  const [learningEvents, setLearningEvents] = useState([]);
   const [hoveredNav, setHoveredNav] = useState(null);
   const [copyStatus, setCopyStatus] = useState("Copy");
   const accountName = "Client";
@@ -166,6 +174,11 @@ function App() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    loadProfile();
+    loadLearningEvents();
+  }, []);
+
   const tokens = THEMES[theme];
 
   const modeLabel = useMemo(() => {
@@ -176,7 +189,7 @@ function App() {
   const navItems = [
     { key: "home", label: "Home", description: "Rewrite and refine", icon: HomeIcon },
     { key: "history", label: "History", description: "Recent rewritten drafts", icon: HistoryIcon },
-    { key: "style-profile", label: "Style Profile", description: "Working to be done", icon: ProfileIcon },
+    { key: "style-profile", label: "Style Profile", description: "Learned writing persona", icon: ProfileIcon },
   ];
 
   const activeSectionTitle =
@@ -187,6 +200,33 @@ function App() {
   const isSettings = activeSection === "settings";
   const isStyleProfile = activeSection === "style-profile";
   const rewriteReady = draft.trim().length > 0;
+
+  async function loadProfile() {
+    try {
+      const response = await fetch(`${API_URL}/profile/${USER_ID}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to load profile.");
+      }
+      setProfile(data.profile || {});
+    } catch {
+      // Keep UX resilient if profile storage is temporarily unavailable.
+      setProfile({});
+    }
+  }
+
+  async function loadLearningEvents() {
+    try {
+      const response = await fetch(`${API_URL}/learning-events/${USER_ID}?limit=25`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to load learning events.");
+      }
+      setLearningEvents(data.events || []);
+    } catch {
+      setLearningEvents([]);
+    }
+  }
 
   async function handleRewrite() {
     setError("");
@@ -216,10 +256,80 @@ function App() {
       }
 
       setRewritten(data.rewritten || "");
+      setLastAiOutput(data.rewritten || "");
+      setLearnMessage("");
     } catch (err) {
       setError(err.message || "Unexpected rewrite error.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleFinalizeVersion() {
+    setLearnMessage("");
+
+    if (!rewritten.trim()) {
+      setLearnMessage("Write or edit a final version first.");
+      return;
+    }
+
+    if (!lastAiOutput.trim()) {
+      setLearnMessage("Generate a rewrite first so learning has a baseline.");
+      return;
+    }
+
+    setLearning(true);
+    try {
+      const response = await fetch(`${API_URL}/learn`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: USER_ID,
+          mode,
+          draft,
+          ai_output: lastAiOutput,
+          final_version: rewritten,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Learning update failed.");
+      }
+
+      setProfile(data.profile || {});
+      loadLearningEvents();
+      setLearnMessage("Saved. Future rewrites will adapt to your style.");
+    } catch (err) {
+      setLearnMessage(err.message || "Could not save learning signal.");
+    } finally {
+      setLearning(false);
+    }
+  }
+
+  async function runStressTest() {
+    setStressMessage("");
+    setStressLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/dev/stress-test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: USER_ID, samples_per_phase: 15 }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Stress test failed.");
+      }
+
+      setProfile(data.profile || {});
+      setStressMessage(`Stress test completed with ${data.processed_samples || 0} samples.`);
+      loadLearningEvents();
+    } catch (err) {
+      setStressMessage(err.message || "Could not run stress test.");
+    } finally {
+      setStressLoading(false);
     }
   }
 
@@ -441,7 +551,8 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => console.log("Final user version:", rewritten)}
+              onClick={handleFinalizeVersion}
+              disabled={learning}
               style={{
                 flex: 1,
                 padding: 10,
@@ -451,32 +562,56 @@ function App() {
                 fontWeight: 500,
                 borderRadius: 12,
                 border: "none",
-                cursor: "pointer",
+                cursor: learning ? "not-allowed" : "pointer",
+                opacity: learning ? 0.7 : 1,
                 transition: "all 150ms ease",
               }}
             >
-              This is my final version
+              {learning ? "Saving..." : "This is my final version"}
             </button>
           </div>
+
+          {learnMessage ? (
+            <p style={{ marginTop: 10, fontSize: 12, color: subduedText }}>{learnMessage}</p>
+          ) : null}
         </div>
       </div>
     );
   }
 
   function renderHistory() {
+    const recent = learningEvents;
+
     return (
       <div className="rounded-2xl border p-6" style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}>
         <div className="space-y-3">
-          {[1, 2, 3].map((item) => (
+          {recent.length === 0 ? (
             <div
-              key={item}
               className="rounded-xl border p-4"
               style={{ backgroundColor: tokens.fieldBg, borderColor: tokens.border }}
             >
-              <p className="text-sm font-semibold" style={{ color: tokens.text }}>Rewrite #{item}</p>
-              <p className="mt-1 text-xs" style={{ color: tokens.muted }}>Working to be done.</p>
+              <p className="text-sm font-semibold" style={{ color: tokens.text }}>No learned rewrites yet</p>
+              <p className="mt-1 text-xs" style={{ color: tokens.muted }}>Finalize a rewrite to create your first history entry.</p>
             </div>
-          ))}
+          ) : (
+            recent.map((entry, index) => (
+              <div
+                key={`${entry.learned_at || "entry"}-${index}`}
+                className="rounded-xl border p-4"
+                style={{ backgroundColor: tokens.fieldBg, borderColor: tokens.border }}
+              >
+                <p className="text-sm font-semibold" style={{ color: tokens.text }}>
+                  {entry.mode ? entry.mode.replaceAll("_", " ") : "rewrite"}
+                </p>
+                <p className="mt-1 text-xs" style={{ color: tokens.muted }}>
+                  {entry.created_at ? new Date(entry.created_at).toLocaleString() : "Recently"}
+                </p>
+                <p className="mt-2 text-xs" style={{ color: tokens.soft }}>
+                  Source: {entry.source || "manual"} • Final: {entry.final_excerpt || "(no preview)"}
+                </p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     );
@@ -519,11 +654,106 @@ function App() {
   }
 
   function renderStyleProfile() {
+    const stats = profile.stats || {};
+    const preferences = profile.preferences || {};
+    const persona = profile.persona || {};
+    const guidance = profile.guidance || [];
+
     return (
       <div className="rounded-2xl border p-6" style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}>
-        <div className="rounded-xl border border-dashed p-8 text-center text-sm" style={{ borderColor: tokens.border, color: tokens.muted }}>
-          No profile builder yet. We will define this together.
+        <div className="rounded-xl border p-5" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+          <p className="text-xs" style={{ color: tokens.muted }}>LEARNED EXAMPLES</p>
+          <p className="mt-1 text-2xl font-semibold" style={{ color: tokens.text }}>{stats.learned_examples || 0}</p>
+          <p className="mt-2 text-xs" style={{ color: tokens.soft }}>
+            Last updated: {stats.last_learned_at ? new Date(stats.last_learned_at).toLocaleString() : "No data yet"}
+          </p>
         </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+            <p className="text-xs" style={{ color: tokens.muted }}>Average sentence length</p>
+            <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>
+              {preferences.avg_sentence_length || 0} words
+            </p>
+          </div>
+          <div className="rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+            <p className="text-xs" style={{ color: tokens.muted }}>Contraction ratio</p>
+            <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>
+              {preferences.contraction_ratio || 0}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+          <p className="text-xs" style={{ color: tokens.muted }}>Learned persona</p>
+          <div className="mt-2 grid gap-2 md:grid-cols-3">
+            <div className="rounded-lg border p-3" style={{ borderColor: tokens.border }}>
+              <p className="text-xs" style={{ color: tokens.muted }}>Formality</p>
+              <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{persona.formality || "unknown"}</p>
+            </div>
+            <div className="rounded-lg border p-3" style={{ borderColor: tokens.border }}>
+              <p className="text-xs" style={{ color: tokens.muted }}>Directness</p>
+              <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{persona.directness || "unknown"}</p>
+            </div>
+            <div className="rounded-lg border p-3" style={{ borderColor: tokens.border }}>
+              <p className="text-xs" style={{ color: tokens.muted }}>Energy</p>
+              <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{persona.energy || "unknown"}</p>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(persona.traits || []).map((trait, index) => (
+              <span
+                key={`${trait}-${index}`}
+                className="rounded-full border px-2 py-1 text-xs"
+                style={{ borderColor: tokens.border, color: tokens.soft, backgroundColor: tokens.surface }}
+              >
+                {trait}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+          <p className="text-xs" style={{ color: tokens.muted }}>Generated guidance for future rewrites</p>
+          {guidance.length === 0 ? (
+            <p className="mt-2 text-sm" style={{ color: tokens.soft }}>
+              Finalize a rewrite to generate personalized guidance.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-1 text-sm" style={{ color: tokens.text }}>
+              {guidance.map((line, index) => (
+                <li key={`${line}-${index}`}>• {line}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {IS_DEV ? (
+          <div className="mt-4 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+            <p className="text-xs" style={{ color: tokens.muted }}>Developer stress testing</p>
+            <button
+              type="button"
+              onClick={runStressTest}
+              disabled={stressLoading}
+              className="mt-2 rounded-lg border px-3 py-2 text-xs font-semibold"
+              style={{
+                borderColor: tokens.border,
+                color: tokens.text,
+                backgroundColor: tokens.surface,
+                cursor: stressLoading ? "not-allowed" : "pointer",
+                opacity: stressLoading ? 0.7 : 1,
+              }}
+            >
+              {stressLoading ? "Running stress test..." : "Run Stress Test Learning (30 samples)"}
+            </button>
+            <p className="mt-2 text-xs" style={{ color: tokens.soft }}>
+              Sends synthetic learning events to the backend and updates persona/profile.
+            </p>
+            {stressMessage ? (
+              <p className="mt-2 text-xs" style={{ color: tokens.muted }}>{stressMessage}</p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     );
   }
