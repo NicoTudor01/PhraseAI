@@ -43,10 +43,20 @@ class StressTestRequest(BaseModel):
 
 app = FastAPI(title="PhraseAI API", version="0.2.0")
 
-frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+frontend_origin = os.getenv("FRONTEND_ORIGIN", "")
 allowed_origins = [origin.strip() for origin in frontend_origin.split(",") if origin.strip()]
-if "http://localhost:5173" not in allowed_origins:
-    allowed_origins.append("http://localhost:5173")
+
+# Safe defaults for local dev and current production frontend domains.
+default_origins = [
+    "http://localhost:5173",
+    "https://phraseai-nico.vercel.app",
+    "https://phraseai-nico-4an34kdci-nicotudor01s-projects.vercel.app",
+    "https://phraseai-nico-5qk8e93x5-nicotudor01s-projects.vercel.app",
+    "https://phraseai-nico-qro9s2srt-nicotudor01s-projects.vercel.app",
+]
+for origin in default_origins:
+    if origin not in allowed_origins:
+        allowed_origins.append(origin)
 
 app.add_middleware(
     CORSMiddleware,
