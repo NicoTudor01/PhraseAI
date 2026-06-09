@@ -1,0 +1,30 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="40" x2="1480" y2="860" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E223C"/>
+      <stop offset="0.58" stop-color="#102B44"/>
+      <stop offset="1" stop-color="#081425"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(410 240) rotate(22) scale(320 320)">
+      <stop stop-color="#84E5FF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#84E5FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1220 640) rotate(-12) scale(380 300)">
+      <stop stop-color="#82FFC9" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#82FFC9" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect x="104" y="92" width="1392" height="716" rx="44" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.18)"/>
+  <rect x="164" y="168" width="620" height="200" rx="24" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.16)"/>
+  <rect x="164" y="402" width="620" height="104" rx="20" fill="rgba(255,255,255,0.04)"/>
+  <rect x="164" y="532" width="620" height="104" rx="20" fill="rgba(255,255,255,0.04)"/>
+  <rect x="836" y="168" width="600" height="468" rx="28" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.16)"/>
+  <path d="M880 474C978 358 1096 574 1195 458C1292 344 1386 446 1386 446" stroke="#A9D4FF" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="1032" cy="368" r="19" fill="#9EECFF"/>
+  <circle cx="1195" cy="458" r="19" fill="#96FFD4"/>
+  <circle cx="1334" cy="396" r="19" fill="#A2B7FF"/>
+  <rect x="164" y="670" width="1272" height="84" rx="18" fill="rgba(255,255,255,0.05)"/>
+  <rect x="0" y="0" width="1600" height="900" fill="url(#glowA)"/>
+  <rect x="0" y="0" width="1600" height="900" fill="url(#glowB)"/>
+</svg>

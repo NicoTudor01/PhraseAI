@@ -50,6 +50,18 @@ body {
   transform-origin: top center;
 }
 
+@keyframes landing-float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0) scale(1.04);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-panel-in {
     animation: none;

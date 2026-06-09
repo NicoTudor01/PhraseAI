@@ -501,12 +501,36 @@ function App() {
       { label: "Live Office Hours", value: "09:00 - 18:00 UTC", href: null },
     ];
 
+    const storyMedia = [
+      {
+        key: "atelier",
+        title: "Crafted Rewriting",
+        text: "A polished flow from rough draft to final message.",
+        image: "/visuals/story-atelier.svg",
+      },
+      {
+        key: "motion",
+        title: "Learning In Motion",
+        text: "Accepted edits shape each future rewrite.",
+        image: "/visuals/story-motion.svg",
+      },
+      {
+        key: "support",
+        title: "Connected Support",
+        text: "Onboarding and enterprise help one message away.",
+        image: "/visuals/story-contact.svg",
+      },
+    ];
+
     return (
       <div
         style={{
           minHeight: "100vh",
+          height: "100vh",
           overflowY: "auto",
           overflowX: "hidden",
+          scrollSnapType: "y mandatory",
+          scrollBehavior: "smooth",
           background:
             "radial-gradient(circle at 12% 10%, rgba(134,197,255,0.2), transparent 28%), radial-gradient(circle at 88% 84%, rgba(120,255,188,0.14), transparent 35%), linear-gradient(160deg, #040810 0%, #0d1a2d 45%, #091120 100%)",
           color: "#f5f7fb",
@@ -527,6 +551,7 @@ function App() {
             background: "radial-gradient(circle, rgba(125,196,255,0.34) 0%, rgba(125,196,255,0.03) 70%)",
             filter: "blur(4px)",
             pointerEvents: "none",
+            animation: "landing-float 11s ease-in-out infinite",
           }}
         />
         <div
@@ -541,12 +566,15 @@ function App() {
             background: "radial-gradient(circle, rgba(106,255,184,0.26) 0%, rgba(106,255,184,0.02) 72%)",
             filter: "blur(6px)",
             pointerEvents: "none",
+            animation: "landing-float 14s ease-in-out infinite reverse",
           }}
         />
 
         <div style={{ width: "100%", maxWidth: 1120, margin: "0 auto", position: "relative", zIndex: 1 }}>
           <section
             style={{
+              minHeight: "100vh",
+              scrollSnapAlign: "start",
               border: "1px solid rgba(255,255,255,0.13)",
               borderRadius: 24,
               background: "rgba(8,13,24,0.72)",
@@ -789,6 +817,59 @@ function App() {
           <section
             style={{
               marginTop: 14,
+              minHeight: "100vh",
+              scrollSnapAlign: "start",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 18,
+              background: "rgba(8,13,24,0.62)",
+              backdropFilter: "blur(8px)",
+              padding: "20px 16px",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.16em", color: "rgba(214,230,255,0.78)" }}>SCROLL EXPERIENCE</p>
+            <h3 style={{ margin: "8px 0 0", fontSize: 28, letterSpacing: "-0.03em" }}>A premium visual narrative for your front page</h3>
+            <p style={{ margin: "10px 0 0", maxWidth: 760, color: "rgba(230,241,255,0.74)", lineHeight: 1.6, fontSize: 14 }}>
+              These are custom generated visuals for PhraseAI, giving your page that cinematic professional flow while staying original.
+            </p>
+
+            <div style={{ marginTop: 16, display: "grid", gap: 14 }}>
+              {storyMedia.map((item, index) => (
+                <article
+                  key={item.key}
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    background: "rgba(255,255,255,0.03)",
+                    boxShadow: "0 16px 42px rgba(0,0,0,0.28)",
+                  }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+                    <div style={{ padding: "18px 18px 16px" }}>
+                      <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.1em", color: "rgba(194,212,245,0.88)" }}>
+                        {String(index + 1).padStart(2, "0")}
+                      </p>
+                      <h4 style={{ margin: "8px 0 0", fontSize: 22, letterSpacing: "-0.02em" }}>{item.title}</h4>
+                      <p style={{ margin: "10px 0 0", lineHeight: 1.6, fontSize: 14, color: "rgba(229,238,255,0.78)" }}>{item.text}</p>
+                    </div>
+                    <div style={{ minHeight: 220, borderLeft: "1px solid rgba(255,255,255,0.1)", overflow: "hidden" }}>
+                      <img
+                        src={item.image}
+                        alt={`${item.title} visual`}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transform: "scale(1.02)" }}
+                      />
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section
+            style={{
+              marginTop: 14,
+              minHeight: "36vh",
+              scrollSnapAlign: "start",
               border: "1px solid rgba(255,255,255,0.1)",
               borderRadius: 18,
               background: "rgba(8,13,24,0.62)",
