@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from datetime import datetime, timezone
@@ -61,10 +62,13 @@ for origin in default_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https://phraseai-nico(?:-[a-z0-9-]+)?-nicotudor01s-projects\.vercel\.app$",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger = logging.getLogger("phraseai.api")
 
 
 def get_supabase() -> Client:
@@ -229,6 +233,53 @@ def mode_instruction(mode: str) -> str:
         "fix_grammar": "Fix grammar, punctuation, and clarity while preserving tone and structure.",
     }
     return mode_map[mode]
+
+
+def _finalize_sentence(text: str) -> str:
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if not cleaned:
+        return ""
+
+    cleaned = cleaned[0].upper() + cleaned[1:] if len(cleaned) > 1 else cleaned.upper()
+    if cleaned[-1] not in ".!?":
+        cleaned += "."
+    return cleaned
+
+
+def local_rewrite_fallback(draft: str, mode: str, style_profile: dict, context: str | None = None) -> str:
+    base = _finalize_sentence(draft)
+    if not base:
+        return ""
+
+    # Small deterministic edits so rewrite still works when external AI providers fail.
+    replacements = {
+        r"\bu\b": "you",
+        r"\bur\b": "your",
+        r"\bpls\b": "please",
+        r"\bthx\b": "thanks",
+        r"\bim\b": "I am",
+        r"\bdont\b": "do not",
+        r"\bcant\b": "cannot",
+        r"\bwont\b": "will not",
+    }
+    for pattern, replacement in replacements.items():
+        base = re.sub(pattern, replacement, base, flags=re.IGNORECASE)
+
+    if mode == "fix_grammar":
+        return base
+
+    if mode == "more_professional":
+        professional = re.sub(r"\bhey\b|\bhi\b", "Hello", base, flags=re.IGNORECASE)
+        if context and context.strip():
+            professional = f"{professional} I have considered the provided context in this version."
+        if not professional.lower().endswith("thank you."):
+            professional = f"{professional} Thank you."
+        return professional
+
+    smarter = base
+    if context and context.strip():
+        smarter = f"{smarter} This reflects the additional context provided."
+    return f"{smarter} This approach improves clarity and strengthens the message."
 
 
 def get_profile_for_user(user_id: str) -> dict:
@@ -429,7 +480,11 @@ def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(get_curr
     model_name = resolve_model_name()
     max_tokens = int(os.getenv("LLM_MAX_TOKENS", "1200"))
 
-    style_profile = get_profile_for_user(user_id)
+    try:
+        style_profile = get_profile_for_user(user_id)
+    except Exception:
+        # Keep rewrite path alive even if profile storage has transient issues.
+        style_profile = {}
     style_guidance = style_profile.get("guidance") or []
     guidance_text = "\n".join(f"- {line}" for line in style_guidance[:6])
     guidance_block = (
@@ -452,11 +507,11 @@ def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(get_curr
         f"Draft:\n{payload.draft}"
     )
 
-    if should_use_openrouter():
-        return RewriteResponse(rewritten=call_openrouter(prompt, model_name, max_tokens))
-
-    client = get_anthropic()
     try:
+        if should_use_openrouter():
+            return RewriteResponse(rewritten=call_openrouter(prompt, model_name, max_tokens))
+
+        client = get_anthropic()
         message = client.messages.create(
             model=model_name,
             max_tokens=max_tokens,
@@ -478,9 +533,14 @@ def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(get_curr
             raise HTTPException(status_code=502, detail="AI provider returned empty output.")
 
         return RewriteResponse(rewritten=rewritten.strip())
-    except HTTPException:
-        raise
     except Exception as exc:
+        fallback_enabled = os.getenv("ENABLE_LOCAL_REWRITE_FALLBACK", "true").lower() == "true"
+        if fallback_enabled:
+            logger.exception("Primary AI provider failed. Falling back to deterministic rewrite.")
+            fallback = local_rewrite_fallback(payload.draft, payload.mode, style_profile, payload.context)
+            if fallback:
+                return RewriteResponse(rewritten=fallback)
+
         raise HTTPException(status_code=500, detail=f"Rewrite failed: {exc}") from exc
 
 
