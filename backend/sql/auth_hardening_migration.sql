@@ -1,5 +1,8 @@
 -- Migration for existing deployments that used text user_id values.
 -- WARNING: rows with non-UUID user_id values are removed before casting.
+-- AGENT3: [CHANGE] Transactional execution prevents a failed cast from leaving RLS disabled.
+-- AGENT4: [HARDENED] NEEDS: AGENT4 REVIEW before production execution because invalid legacy rows are deleted.
+begin;
 
 alter table if exists public.learning_events disable row level security;
 alter table if exists public.style_profiles disable row level security;
@@ -75,3 +78,5 @@ create policy "style_profiles_delete_own"
 on public.style_profiles
 for delete
 using (auth.uid() = user_id);
+
+commit;

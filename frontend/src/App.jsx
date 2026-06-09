@@ -5,7 +5,10 @@ const API_URL =
   import.meta.env.VITE_API_URL || "https://phraseai-production.up.railway.app";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const FORCE_LOGIN_ON_VISIT = (import.meta.env.VITE_FORCE_LOGIN_ON_VISIT || "true").toLowerCase() === "true";
+// AGENT3: [CHANGE] Preserve Supabase sessions by default; forced sign-out is reserved for explicit test deployments.
+const FORCE_LOGIN_ON_VISIT = (import.meta.env.VITE_FORCE_LOGIN_ON_VISIT || "false").toLowerCase() === "true";
+const MAX_DRAFT_CHARS = 12000;
+const MAX_CONTEXT_CHARS = 8000;
 const THEME_STORAGE_KEY = "phraseai-theme";
 const IS_DEV = import.meta.env.DEV;
 const LOGIN_RATE_LIMIT_MAX = 5;
@@ -200,6 +203,7 @@ function App() {
   const [mode, setMode] = useState("more_professional");
   const [rewritten, setRewritten] = useState("");
   const [lastAiOutput, setLastAiOutput] = useState("");
+  const [lastRewriteSource, setLastRewriteSource] = useState("provider");
   const [activeSection, setActiveSection] = useState("home");
   const [theme, setTheme] = useState("dark");
   const [loading, setLoading] = useState(false);
@@ -215,6 +219,7 @@ function App() {
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [authMode, setAuthMode] = useState("signin");
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
@@ -299,7 +304,12 @@ function App() {
     bootstrapAuth();
 
     const { data: authListener } = supabase
-      ? supabase.auth.onAuthStateChange((_event, nextSession) => {
+      ? supabase.auth.onAuthStateChange((event, nextSession) => {
+          // AGENT3: [CHANGE] Recovery links now enter a dedicated set-password state instead of a dead-end login screen.
+          if (event === "PASSWORD_RECOVERY") {
+            setIsPasswordRecovery(true);
+            setAuthMode("recovery");
+          }
           setSession(nextSession || null);
         })
       : { data: { subscription: { unsubscribe: () => {} } } };
@@ -342,23 +352,54 @@ function App() {
   const isStyleProfile = activeSection === "style-profile";
   const isAccount = activeSection === "account";
   const rewriteReady = draft.trim().length > 0;
+  const outputReady = rewritten.trim().length > 0;
+  const finalizeReady = outputReady && lastAiOutput.trim().length > 0;
 
   async function apiFetch(path, options = {}) {
-    if (!session?.access_token) {
+    if (!supabase) {
+      throw new Error("Authentication is unavailable.");
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    let activeSession = sessionData.session || session;
+    if (!activeSession?.access_token) {
       throw new Error("You must be logged in.");
     }
 
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-      ...(options.headers || {}),
-    };
+    async function sendRequest(accessToken) {
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        ...(options.headers || {}),
+      };
+      return fetch(`${API_URL}${path}`, { ...options, headers });
+    }
 
-    const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+    let response = await sendRequest(activeSession.access_token);
+    if (response.status === 401) {
+      // AGENT3: [CHANGE] Retry one authenticated request after token refresh before ending the session.
+      const { data: refreshedData } = await supabase.auth.refreshSession();
+      activeSession = refreshedData.session;
+      if (activeSession?.access_token) {
+        response = await sendRequest(activeSession.access_token);
+      }
+    }
+
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(data.detail || "Request failed.");
+      // AGENT4: [HARDENED] UI shows stable messages instead of raw backend/provider exception strings.
+      const safeMessage =
+        response.status === 401
+          ? "Your session expired. Please sign in again."
+          : response.status === 422
+            ? "This draft or context is too large or invalid."
+            : typeof data.detail === "string"
+              ? data.detail
+              : "Request failed.";
+      const requestError = new Error(safeMessage);
+      requestError.status = response.status;
+      throw requestError;
     }
 
     return data;
@@ -405,16 +446,20 @@ function App() {
 
       setRewritten(data.rewritten || "");
       setLastAiOutput(data.rewritten || "");
+      setLastRewriteSource(data.source || "provider");
       setLearnMessage("");
     } catch (err) {
       const message = err?.message || "Unexpected rewrite error.";
       const authLikeFailure = /authorization|auth token|logged in|401/i.test(message);
+      const canUseFallback = !err?.status || err.status >= 500;
 
-      if (!authLikeFailure) {
+      // AGENT5: [CHANGE] Local fallback is reserved for provider/network outages, not invalid API requests.
+      if (!authLikeFailure && canUseFallback) {
         const fallback = localRewriteFallback(draft, mode, contextText);
         if (fallback) {
           setRewritten(fallback);
           setLastAiOutput(fallback);
+          setLastRewriteSource("fallback");
           setError("AI service is temporarily unavailable. Displaying a safe fallback rewrite.");
           return;
         }
@@ -501,6 +546,15 @@ function App() {
     setAuthMessage("");
 
     try {
+      if (isPasswordRecovery || authMode === "recovery") {
+        const { error: updateError } = await supabase.auth.updateUser({ password });
+        if (updateError) throw updateError;
+        setIsPasswordRecovery(false);
+        setAuthMode("signin");
+        setAuthMessage("Password updated. You can continue with your account.");
+        return;
+      }
+
       if (authMode === "signup") {
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) {
@@ -580,6 +634,7 @@ function App() {
     setDraft("");
     setRewritten("");
     setLastAiOutput("");
+    setLastRewriteSource("provider");
     setContextText("");
     setLearnMessage("");
     setError("");
@@ -594,7 +649,7 @@ function App() {
     );
   }
 
-  if (!session?.access_token) {
+  if (!session?.access_token || isPasswordRecovery) {
     const highlightItems = [
       "Smart rewrite modes",
       "Learning style profile",
@@ -692,31 +747,38 @@ function App() {
                   padding: 18,
                 }}
               >
-                <h2 style={{ margin: 0, fontSize: 22, letterSpacing: "-0.02em", color: tokens.text }}>Access Workspace</h2>
+                <h2 style={{ margin: 0, fontSize: 22, letterSpacing: "-0.02em", color: tokens.text }}>
+                  {isPasswordRecovery ? "Set New Password" : "Access Workspace"}
+                </h2>
                 <p style={{ marginTop: 6, fontSize: 12, color: tokens.muted }}>
-                  {authMode === "signin" ? "Sign in to continue." : "Create your account."}
+                  {isPasswordRecovery ? "Choose a secure password to finish recovery." : authMode === "signin" ? "Sign in to continue." : "Create your account."}
                 </p>
 
-                <label style={{ display: "block", marginTop: 12, fontSize: 11, letterSpacing: "0.08em", color: tokens.muted }}>EMAIL</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  autoComplete="email"
-                  style={{
-                    width: "100%",
-                    marginTop: 6,
-                    padding: "10px 11px",
-                    borderRadius: 10,
-                    border: `1px solid ${tokens.border}`,
-                    background: tokens.fieldBg,
-                    color: tokens.fieldText,
-                    outline: "none",
-                  }}
-                />
+                {!isPasswordRecovery ? (
+                  <>
+                    <label style={{ display: "block", marginTop: 12, fontSize: 11, letterSpacing: "0.08em", color: tokens.muted }}>EMAIL</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      required
+                      autoComplete="email"
+                      style={{
+                        width: "100%",
+                        marginTop: 6,
+                        padding: "10px 11px",
+                        borderRadius: 10,
+                        border: `1px solid ${tokens.border}`,
+                        background: tokens.fieldBg,
+                        color: tokens.fieldText,
+                      }}
+                    />
+                  </>
+                ) : null}
 
-                <label style={{ display: "block", marginTop: 10, fontSize: 11, letterSpacing: "0.08em", color: tokens.muted }}>PASSWORD</label>
+                <label style={{ display: "block", marginTop: 10, fontSize: 11, letterSpacing: "0.08em", color: tokens.muted }}>
+                  {isPasswordRecovery ? "NEW PASSWORD" : "PASSWORD"}
+                </label>
                 <input
                   type="password"
                   value={password}
@@ -732,11 +794,10 @@ function App() {
                     border: `1px solid ${tokens.border}`,
                     background: tokens.fieldBg,
                     color: tokens.fieldText,
-                    outline: "none",
                   }}
                 />
 
-                {authMode === "signin" ? (
+                {authMode === "signin" && !isPasswordRecovery ? (
                   <button
                     type="button"
                     onClick={handleForgotPassword}
@@ -772,10 +833,10 @@ function App() {
                     opacity: authBusy ? 0.7 : 1,
                   }}
                 >
-                  {authBusy ? "Working..." : authMode === "signin" ? "Sign In" : "Create Account"}
+                  {authBusy ? "Working..." : isPasswordRecovery ? "Update Password" : authMode === "signin" ? "Sign In" : "Create Account"}
                 </button>
 
-                <button
+                {!isPasswordRecovery ? <button
                   type="button"
                   onClick={() => {
                     setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
@@ -794,7 +855,7 @@ function App() {
                   }}
                 >
                   {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-                </button>
+                </button> : null}
 
                 {authError ? <p style={{ marginTop: 10, fontSize: 12, color: "#f87171" }}>{authError}</p> : null}
                 {authMessage ? <p style={{ marginTop: 10, fontSize: 12, color: tokens.muted }}>{authMessage}</p> : null}
@@ -877,6 +938,7 @@ function App() {
   }
 
   function renderHome() {
+    // AGENT2: [CHANGE] Composer actions expose clear ready/loading states and stack responsively on narrow screens.
     const cardBackground = tokens.surfaceStrong;
     const cardBorder = tokens.border;
     const bodyText = tokens.text;
@@ -895,6 +957,7 @@ function App() {
 
     return (
       <div
+        className="composer-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
@@ -921,6 +984,7 @@ function App() {
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            maxLength={MAX_DRAFT_CHARS}
             placeholder="Paste or write your email draft here..."
             className="themed-textarea"
             style={{
@@ -935,7 +999,6 @@ function App() {
               resize: "none",
               width: "100%",
               boxSizing: "border-box",
-              outline: "none",
             }}
           />
 
@@ -986,6 +1049,7 @@ function App() {
             <textarea
               value={contextText}
               onChange={(e) => setContextText(e.target.value)}
+              maxLength={MAX_CONTEXT_CHARS}
               placeholder="Original email or extra context..."
               className="themed-textarea"
               style={{
@@ -999,15 +1063,15 @@ function App() {
                 resize: "vertical",
                 width: "100%",
                 boxSizing: "border-box",
-                outline: "none",
               }}
             />
           </div>
 
           <button
             type="button"
-            disabled={loading}
+            disabled={loading || !rewriteReady}
             onClick={handleRewrite}
+            aria-busy={loading}
             style={{
               marginTop: 12,
               width: "100%",
@@ -1018,7 +1082,7 @@ function App() {
               fontWeight: 600,
               borderRadius: 12,
               border: "none",
-              cursor: loading ? "not-allowed" : "pointer",
+              cursor: loading || !rewriteReady ? "not-allowed" : "pointer",
               opacity: loading ? 0.6 : rewriteReady ? 1 : 0.6,
               transition: "all 150ms ease",
             }}
@@ -1049,6 +1113,7 @@ function App() {
           <textarea
             value={rewritten}
             onChange={(e) => setRewritten(e.target.value)}
+            maxLength={MAX_DRAFT_CHARS}
             placeholder="Your rewritten email will appear here..."
             className="themed-textarea"
             style={{
@@ -1063,14 +1128,21 @@ function App() {
               resize: "none",
               width: "100%",
               boxSizing: "border-box",
-              outline: "none",
             }}
           />
+
+          {loading ? <div className="rewrite-skeleton" aria-label="Generating rewrite" /> : null}
+          {lastRewriteSource === "fallback" && outputReady ? (
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: subduedText }}>
+              Provider unavailable. This draft used the local fallback and can still be edited.
+            </p>
+          ) : null}
 
           <div style={{ marginTop: "auto", paddingTop: 16, display: "flex", gap: 12 }}>
             <button
               type="button"
               onClick={copyResult}
+              disabled={!outputReady}
               style={{
                 flex: 1,
                 padding: 10,
@@ -1079,7 +1151,8 @@ function App() {
                 color: secondaryActionColor,
                 fontSize: 13,
                 borderRadius: 12,
-                cursor: "pointer",
+                cursor: outputReady ? "pointer" : "not-allowed",
+                opacity: outputReady ? 1 : 0.5,
                 transition: "all 150ms ease",
               }}
             >
@@ -1088,7 +1161,8 @@ function App() {
             <button
               type="button"
               onClick={handleFinalizeVersion}
-              disabled={learning}
+              disabled={learning || !finalizeReady}
+              aria-busy={learning}
               style={{
                 flex: 1,
                 padding: 10,
@@ -1098,8 +1172,8 @@ function App() {
                 fontWeight: 500,
                 borderRadius: 12,
                 border: "none",
-                cursor: learning ? "not-allowed" : "pointer",
-                opacity: learning ? 0.7 : 1,
+                cursor: learning || !finalizeReady ? "not-allowed" : "pointer",
+                opacity: learning || !finalizeReady ? 0.55 : 1,
                 transition: "all 150ms ease",
               }}
             >
@@ -1355,6 +1429,7 @@ function App() {
 
   return (
     <div
+      className="app-shell"
       style={{
         display: "flex",
         height: "100vh",
@@ -1370,6 +1445,7 @@ function App() {
       }}
     >
       <aside
+        className="app-sidebar"
         style={{
           width: 88,
           flexShrink: 0,
@@ -1517,6 +1593,7 @@ function App() {
       </aside>
 
       <main
+        className="app-main"
         style={{
           flex: 1,
           minWidth: 0,
@@ -1526,13 +1603,14 @@ function App() {
         }}
       >
         <header
+          className="app-header"
           style={{
             padding: "20px 24px",
             borderBottom: `1px solid ${tokens.border}`,
             flexShrink: 0,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div className="app-header-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.04em", margin: 0, color: tokens.text }}>
                 {currentMeta.title}
@@ -1541,7 +1619,7 @@ function App() {
                 {currentMeta.sub}
               </p>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="app-header-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {aiInfo?.model ? (
                 <span style={{ fontSize: 11, color: tokens.soft, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   AI: {aiInfo.provider || "unknown"} / {aiInfo.model}
@@ -1569,7 +1647,7 @@ function App() {
           </div>
         </header>
 
-        <div style={{ padding: 24, boxSizing: "border-box", flex: 1, minHeight: 0, overflow: "auto" }}>
+        <div className="app-content" style={{ padding: 24, boxSizing: "border-box", flex: 1, minHeight: 0, overflow: "auto" }}>
           {isHome ? renderHome() : null}
           {isHistory ? renderHistory() : null}
           {isSettings ? renderSettings() : null}

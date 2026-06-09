@@ -15,6 +15,7 @@ create index if not exists learning_events_user_created_idx
   on public.learning_events (user_id, created_at desc);
 
 alter table public.learning_events enable row level security;
+-- AGENT4: [HARDENED] Every operation is scoped to the authenticated user's UUID.
 
 drop policy if exists "learning_events_select_own" on public.learning_events;
 create policy "learning_events_select_own"

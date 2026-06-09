@@ -28,6 +28,9 @@ nixpacks.toml  # Forces Railway build to Python backend in monorepo
 
 ## Environment Variables
 
+<!-- AGENT5: [CHANGE] .env.example is the complete configuration reference; runtime files remain scoped by app. -->
+See `.env.example` for every supported variable and safe local defaults.
+
 Use only these runtime env files:
 - `frontend/.env`
 - `backend/.env`
@@ -38,6 +41,7 @@ Frontend (`frontend/.env`):
 - `VITE_API_URL` (example: `http://localhost:8000`)
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_FORCE_LOGIN_ON_VISIT` (optional, defaults to `false`)
 
 Backend (`backend/.env`):
 - `ANTHROPIC_API_KEY` (use your OpenRouter key here when using OpenRouter)
@@ -48,6 +52,11 @@ Backend (`backend/.env`):
 - `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_KEY` for backwards compatibility)
 - `FRONTEND_ORIGIN` (example: `http://localhost:5173`)
 - `ALLOW_DEV_STRESS_TEST` (optional, set `true` only in safe dev environments)
+- `ENABLE_LOCAL_REWRITE_FALLBACK` (optional, defaults to `true`)
+- `OPENROUTER_TIMEOUT_SECONDS` (optional, defaults to `25`)
+- `OPENROUTER_DEFAULT_MODEL`, `OPENROUTER_FALLBACK_MODELS` (optional)
+- `OPENROUTER_SITE_URL`, `OPENROUTER_APP_TITLE` (optional)
+- `MAX_DRAFT_CHARS`, `MAX_CONTEXT_CHARS`, `MAX_FINAL_CHARS`, `MAX_PROFILE_JSON_CHARS` (optional safety limits)
 
 ### Where To Find Supabase Values
 
@@ -146,7 +155,7 @@ For existing deployments that used text user IDs, run `backend/sql/auth_hardenin
 	- Auth: Bearer token required
 	- Input: `{ draft, mode, context? }`
 	- mode: `more_professional` | `sound_smarter` | `fix_grammar`
-	- Returns rewritten email using Claude/OpenRouter
+	- Returns `{ rewritten, source }`, where source is `provider` or `fallback`
 - `POST /learn`
 	- Auth: Bearer token required
 	- Input: `{ mode, draft, ai_output, final_version }`
@@ -191,8 +200,8 @@ For existing deployments that used text user IDs, run `backend/sql/auth_hardenin
 
 ### Go-Live Checklist
 
-1. Run SQL in `backend/sql/style_profiles.sql` and `backend/sql/learning_events.sql` on Supabase.
-2. If your DB has old text-based user IDs, run `backend/sql/auth_hardening_migration.sql`.
+1. If your DB has old text-based user IDs, run `backend/sql/auth_hardening_migration.sql` first.
+2. Run SQL in `backend/sql/style_profiles.sql` and `backend/sql/learning_events.sql` on Supabase.
 3. Deploy backend to Railway and set all backend env vars.
 4. Copy Railway public URL.
 5. Deploy frontend to Vercel with root directory `frontend`.

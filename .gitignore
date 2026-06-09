@@ -1,5 +1,6 @@
 .env
 .env.local
+!.env.example
 # Keep env files scoped under frontend/ and backend/ only.
 .claude/settings.local.json
 frontend/node_modules
@@ -8,4 +9,3 @@ backend/.venv
 backend/__pycache__
 backend/.pytest_cache
 *.pyc
-
