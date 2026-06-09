@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-const USER_ID = "dev-user-1";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const FORCE_LOGIN_ON_VISIT = (import.meta.env.VITE_FORCE_LOGIN_ON_VISIT || "true").toLowerCase() === "true";
 const THEME_STORAGE_KEY = "phraseai-theme";
 const IS_DEV = import.meta.env.DEV;
+const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 const MODES = [
   { key: "more_professional", label: "More Professional" },
@@ -152,7 +156,15 @@ function App() {
   const [learningEvents, setLearningEvents] = useState([]);
   const [hoveredNav, setHoveredNav] = useState(null);
   const [copyStatus, setCopyStatus] = useState("Copy");
-  const accountName = "Client";
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authMode, setAuthMode] = useState("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const accountName = session?.user?.email || "Client";
   const accountInitials = getInitials(accountName);
 
   useEffect(() => {
@@ -175,9 +187,57 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
+    let mounted = true;
+
+    async function bootstrapAuth() {
+      if (!supabase) {
+        setAuthError("Missing Supabase frontend configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+        setAuthReady(true);
+        return;
+      }
+
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (sessionError) {
+        setAuthError(sessionError.message || "Could not read current session.");
+      }
+
+      if (FORCE_LOGIN_ON_VISIT && data.session) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setAuthMessage("Please sign in to continue.");
+        setAuthReady(true);
+        return;
+      }
+
+      setSession(data.session || null);
+      setAuthReady(true);
+    }
+
+    bootstrapAuth();
+
+    const { data: authListener } = supabase
+      ? supabase.auth.onAuthStateChange((_event, nextSession) => {
+          setSession(nextSession || null);
+        })
+      : { data: { subscription: { unsubscribe: () => {} } } };
+
+    return () => {
+      mounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!session?.access_token) {
+      setProfile({});
+      setLearningEvents([]);
+      return;
+    }
     loadProfile();
     loadLearningEvents();
-  }, []);
+  }, [session?.access_token]);
 
   const tokens = THEMES[theme];
 
@@ -201,13 +261,30 @@ function App() {
   const isStyleProfile = activeSection === "style-profile";
   const rewriteReady = draft.trim().length > 0;
 
+  async function apiFetch(path, options = {}) {
+    if (!session?.access_token) {
+      throw new Error("You must be logged in.");
+    }
+
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+      ...(options.headers || {}),
+    };
+
+    const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Request failed.");
+    }
+
+    return data;
+  }
+
   async function loadProfile() {
     try {
-      const response = await fetch(`${API_URL}/profile/${USER_ID}`);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "Failed to load profile.");
-      }
+      const data = await apiFetch("/profile/me");
       setProfile(data.profile || {});
     } catch {
       // Keep UX resilient if profile storage is temporarily unavailable.
@@ -217,11 +294,7 @@ function App() {
 
   async function loadLearningEvents() {
     try {
-      const response = await fetch(`${API_URL}/learning-events/${USER_ID}?limit=25`);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "Failed to load learning events.");
-      }
+      const data = await apiFetch("/learning-events/me?limit=25");
       setLearningEvents(data.events || []);
     } catch {
       setLearningEvents([]);
@@ -240,20 +313,13 @@ function App() {
       const requestPayload = {
         draft,
         mode,
-        user_id: USER_ID,
         context: contextText.trim() || null,
       };
 
-      const response = await fetch(`${API_URL}/rewrite`, {
+      const data = await apiFetch("/rewrite", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestPayload),
       });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "Rewrite failed.");
-      }
 
       setRewritten(data.rewritten || "");
       setLastAiOutput(data.rewritten || "");
@@ -280,22 +346,15 @@ function App() {
 
     setLearning(true);
     try {
-      const response = await fetch(`${API_URL}/learn`, {
+      const data = await apiFetch("/learn", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: USER_ID,
           mode,
           draft,
           ai_output: lastAiOutput,
           final_version: rewritten,
         }),
       });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "Learning update failed.");
-      }
 
       setProfile(data.profile || {});
       loadLearningEvents();
@@ -312,16 +371,10 @@ function App() {
     setStressLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/dev/stress-test`, {
+      const data = await apiFetch("/dev/stress-test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: USER_ID, samples_per_phase: 15 }),
+        body: JSON.stringify({ samples_per_phase: 15 }),
       });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || "Stress test failed.");
-      }
 
       setProfile(data.profile || {});
       setStressMessage(`Stress test completed with ${data.processed_samples || 0} samples.`);
@@ -338,6 +391,115 @@ function App() {
     await navigator.clipboard.writeText(rewritten);
     setCopyStatus("Copied");
     window.setTimeout(() => setCopyStatus("Copy"), 1200);
+  }
+
+  async function handleAuthSubmit(event) {
+    event.preventDefault();
+
+    if (!supabase) {
+      setAuthError("Supabase client is not configured.");
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError("");
+    setAuthMessage("");
+
+    try {
+      if (authMode === "signup") {
+        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        if (signUpError) {
+          throw signUpError;
+        }
+        setAuthMessage("Account created. Check your email for confirmation if required, then sign in.");
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) {
+          throw signInError;
+        }
+      }
+    } catch (err) {
+      setAuthError(err.message || "Authentication failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleSignOut() {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setDraft("");
+    setRewritten("");
+    setLastAiOutput("");
+    setContextText("");
+    setLearnMessage("");
+    setError("");
+    setAuthMessage("You have been signed out.");
+  }
+
+  if (!authReady) {
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: tokens.pageBackground, color: tokens.text }}>
+        <p style={{ fontSize: 14, color: tokens.muted }}>Loading session...</p>
+      </div>
+    );
+  }
+
+  if (!session?.access_token) {
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: tokens.pageBackground, color: tokens.text, padding: 16 }}>
+        <form onSubmit={handleAuthSubmit} style={{ width: "100%", maxWidth: 420, border: `1px solid ${tokens.border}`, borderRadius: 18, background: tokens.surfaceStrong, padding: 24 }}>
+          <h1 style={{ margin: 0, fontSize: 24, letterSpacing: "-0.03em" }}>PhraseAI Access</h1>
+          <p style={{ marginTop: 8, fontSize: 13, color: tokens.muted }}>
+            {authMode === "signin" ? "Sign in with your email and password." : "Create an account with email + password."}
+          </p>
+
+          <label style={{ display: "block", marginTop: 16, fontSize: 12, color: tokens.soft }}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            autoComplete="email"
+            style={{ width: "100%", marginTop: 6, padding: 10, borderRadius: 10, border: `1px solid ${tokens.border}`, background: tokens.fieldBg, color: tokens.fieldText }}
+          />
+
+          <label style={{ display: "block", marginTop: 12, fontSize: 12, color: tokens.soft }}>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            minLength={8}
+            autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+            style={{ width: "100%", marginTop: 6, padding: 10, borderRadius: 10, border: `1px solid ${tokens.border}`, background: tokens.fieldBg, color: tokens.fieldText }}
+          />
+
+          <button
+            type="submit"
+            disabled={authBusy}
+            style={{ marginTop: 16, width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", background: tokens.primaryBg, color: tokens.primaryText, fontWeight: 600, cursor: authBusy ? "not-allowed" : "pointer", opacity: authBusy ? 0.7 : 1 }}
+          >
+            {authBusy ? "Working..." : authMode === "signin" ? "Sign In" : "Create Account"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
+              setAuthError("");
+              setAuthMessage("");
+            }}
+            style={{ marginTop: 10, width: "100%", padding: "9px 12px", borderRadius: 12, border: `1px solid ${tokens.border}`, background: tokens.secondaryBg, color: tokens.secondaryText, cursor: "pointer" }}
+          >
+            {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+          </button>
+
+          {authError ? <p style={{ marginTop: 12, fontSize: 12, color: "#ef4444" }}>{authError}</p> : null}
+          {authMessage ? <p style={{ marginTop: 12, fontSize: 12, color: tokens.muted }}>{authMessage}</p> : null}
+        </form>
+      </div>
+    );
   }
 
   function renderHome() {
@@ -906,7 +1068,9 @@ function App() {
             Settings
           </div>
 
-          <div
+          <button
+            type="button"
+            onClick={handleSignOut}
             style={{
               width: 40,
               height: 40,
@@ -920,12 +1084,13 @@ function App() {
               border: `1px solid ${tokens.badgeBorder}`,
               fontSize: 12,
               fontWeight: 700,
-              cursor: "default",
+              cursor: "pointer",
             }}
-            title={accountName}
+            title={`${accountName} (click to sign out)`}
+            aria-label="Account"
           >
             {accountInitials}
-          </div>
+          </button>
         </div>
       </aside>
 
@@ -945,12 +1110,36 @@ function App() {
             flexShrink: 0,
           }}
         >
-          <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.04em", margin: 0, color: tokens.text }}>
-            {currentMeta.title}
-          </h1>
-          <p style={{ fontSize: 13, color: tokens.muted, marginTop: 4, marginBottom: 0 }}>
-            {currentMeta.sub}
-          </p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.04em", margin: 0, color: tokens.text }}>
+                {currentMeta.title}
+              </h1>
+              <p style={{ fontSize: 13, color: tokens.muted, marginTop: 4, marginBottom: 0 }}>
+                {currentMeta.sub}
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 12, color: tokens.muted, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {session?.user?.email || "Signed in"}
+              </span>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                style={{
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.secondaryBg,
+                  color: tokens.secondaryText,
+                  borderRadius: 10,
+                  padding: "8px 10px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
         </header>
 
         <div style={{ padding: 24, boxSizing: "border-box", flex: 1, minHeight: 0, overflow: "auto" }}>
