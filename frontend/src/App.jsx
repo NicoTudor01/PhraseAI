@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000" : "https://phraseai-production.up.railway.app");
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const FORCE_LOGIN_ON_VISIT = (import.meta.env.VITE_FORCE_LOGIN_ON_VISIT || "true").toLowerCase() === "true";
