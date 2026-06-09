@@ -73,13 +73,14 @@ logger = logging.getLogger("phraseai.api")
 
 def get_supabase() -> Client:
     supabase_url = os.getenv("SUPABASE_URL")
-    # Prefer explicit service role key and keep SUPABASE_KEY for backwards compatibility.
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+    # Prefer explicit service role key, keep SUPABASE_KEY for backwards compatibility,
+    # and fall back to anon key so auth token checks can still work in degraded setups.
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
 
     if not supabase_url or not supabase_key:
         raise HTTPException(
             status_code=500,
-            detail="Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.",
+            detail="Missing SUPABASE_URL and usable Supabase key (SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KEY, or SUPABASE_ANON_KEY).",
         )
 
     return create_client(supabase_url, supabase_key)
@@ -567,8 +568,10 @@ def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(get_curr
         if fallback_enabled:
             logger.exception("Primary AI provider failed. Falling back to deterministic rewrite.")
             fallback = local_rewrite_fallback(payload.draft, payload.mode, style_profile, payload.context)
-            if fallback:
-                return RewriteResponse(rewritten=fallback)
+            if not fallback:
+                draft_text = (payload.draft or "").strip()
+                fallback = draft_text or "Please provide a draft so I can rewrite it."
+            return RewriteResponse(rewritten=fallback)
 
         raise HTTPException(status_code=500, detail=f"Rewrite failed: {exc}") from exc
 
