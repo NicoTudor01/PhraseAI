@@ -546,6 +546,24 @@ function App() {
       { label: "Hours", value: "09:00 - 18:00 UTC", href: null },
     ];
 
+    const visualSections = [
+      {
+        title: "Refine Your Message",
+        text: "Choose a rewrite mode and instantly improve clarity while keeping your intent.",
+        image: "/visuals/story-atelier.svg",
+      },
+      {
+        title: "Teach Your Style",
+        text: "Every final edit helps PhraseAI learn how you naturally communicate.",
+        image: "/visuals/story-motion.svg",
+      },
+      {
+        title: "Stay Connected",
+        text: "Get support and onboarding guidance whenever your team needs it.",
+        image: "/visuals/story-contact.svg",
+      },
+    ];
+
     const cardBg = theme === "dark" ? "rgba(0,0,0,0.62)" : "rgba(255,255,255,0.84)";
     const cardBorder = tokens.border;
 
@@ -555,7 +573,7 @@ function App() {
           minHeight: "100vh",
           background: tokens.pageBackground,
           color: tokens.text,
-          padding: "28px 16px",
+          padding: "28px 16px 48px",
           fontFamily: "Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif",
         }}
       >
@@ -739,6 +757,51 @@ function App() {
                 )}
               </div>
             ))}
+          </section>
+
+          <section
+            style={{
+              border: `1px solid ${cardBorder}`,
+              borderRadius: 16,
+              background: cardBg,
+              padding: "18px",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 10, letterSpacing: "0.1em", color: tokens.muted }}>SCROLL TO EXPLORE</p>
+            <h3 style={{ margin: "8px 0 0", fontSize: 22, letterSpacing: "-0.02em", color: tokens.text }}>
+              A cleaner visual overview of PhraseAI
+            </h3>
+            <p style={{ margin: "8px 0 0", fontSize: 13, color: tokens.soft, maxWidth: 720, lineHeight: 1.6 }}>
+              Scroll through these quick visuals to see how drafting, learning, and support work together.
+            </p>
+
+            <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+              {visualSections.map((item) => (
+                <article
+                  key={item.title}
+                  style={{
+                    border: `1px solid ${tokens.border}`,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    background: tokens.surface,
+                  }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+                    <div style={{ padding: "14px 14px 12px" }}>
+                      <h4 style={{ margin: 0, fontSize: 17, color: tokens.text }}>{item.title}</h4>
+                      <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.6, color: tokens.muted }}>{item.text}</p>
+                    </div>
+                    <div style={{ minHeight: 180, borderLeft: `1px solid ${tokens.border}` }}>
+                      <img
+                        src={item.image}
+                        alt={`${item.title} illustration`}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      />
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
           </section>
         </div>
       </div>
