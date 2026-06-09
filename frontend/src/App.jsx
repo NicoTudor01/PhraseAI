@@ -99,6 +99,15 @@ function ProfileIcon() {
   );
 }
 
+function AccountIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0" style={{ vectorEffect: "non-scaling-stroke" }} aria-hidden="true">
+      <circle cx="12" cy="8" r="3.2" />
+      <path d="M5.2 20c1.5-3.1 4.2-4.7 6.8-4.7 2.6 0 5.3 1.6 6.8 4.7" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0" style={{ vectorEffect: "non-scaling-stroke" }} aria-hidden="true">
@@ -259,6 +268,7 @@ function App() {
   const isHistory = activeSection === "history";
   const isSettings = activeSection === "settings";
   const isStyleProfile = activeSection === "style-profile";
+  const isAccount = activeSection === "account";
   const rewriteReady = draft.trim().length > 0;
 
   async function apiFetch(path, options = {}) {
@@ -447,57 +457,182 @@ function App() {
 
   if (!session?.access_token) {
     return (
-      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: tokens.pageBackground, color: tokens.text, padding: 16 }}>
-        <form onSubmit={handleAuthSubmit} style={{ width: "100%", maxWidth: 420, border: `1px solid ${tokens.border}`, borderRadius: 18, background: tokens.surfaceStrong, padding: 24 }}>
-          <h1 style={{ margin: 0, fontSize: 24, letterSpacing: "-0.03em" }}>PhraseAI Access</h1>
-          <p style={{ marginTop: 8, fontSize: 13, color: tokens.muted }}>
-            {authMode === "signin" ? "Sign in with your email and password." : "Create an account with email + password."}
-          </p>
-
-          <label style={{ display: "block", marginTop: 16, fontSize: 12, color: tokens.soft }}>Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-            autoComplete="email"
-            style={{ width: "100%", marginTop: 6, padding: 10, borderRadius: 10, border: `1px solid ${tokens.border}`, background: tokens.fieldBg, color: tokens.fieldText }}
-          />
-
-          <label style={{ display: "block", marginTop: 12, fontSize: 12, color: tokens.soft }}>Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            minLength={8}
-            autoComplete={authMode === "signin" ? "current-password" : "new-password"}
-            style={{ width: "100%", marginTop: 6, padding: 10, borderRadius: 10, border: `1px solid ${tokens.border}`, background: tokens.fieldBg, color: tokens.fieldText }}
-          />
-
-          <button
-            type="submit"
-            disabled={authBusy}
-            style={{ marginTop: 16, width: "100%", padding: "10px 12px", borderRadius: 12, border: "none", background: tokens.primaryBg, color: tokens.primaryText, fontWeight: 600, cursor: authBusy ? "not-allowed" : "pointer", opacity: authBusy ? 0.7 : 1 }}
-          >
-            {authBusy ? "Working..." : authMode === "signin" ? "Sign In" : "Create Account"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
-              setAuthError("");
-              setAuthMessage("");
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background:
+            "radial-gradient(circle at 8% 15%, rgba(229,204,255,0.12), transparent 30%), radial-gradient(circle at 90% 80%, rgba(117,186,255,0.16), transparent 33%), linear-gradient(150deg, #05070f 0%, #101827 47%, #0b1322 100%)",
+          color: "#f5f7fb",
+          padding: 20,
+          fontFamily: "Space Grotesk, Avenir Next, Segoe UI, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 1080,
+            display: "grid",
+            gridTemplateColumns: "1.15fr 0.85fr",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 24,
+            overflow: "hidden",
+            background: "rgba(6,10,20,0.68)",
+            boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <section
+            style={{
+              padding: "46px 46px 42px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              borderRight: "1px solid rgba(255,255,255,0.08)",
             }}
-            style={{ marginTop: 10, width: "100%", padding: "9px 12px", borderRadius: 12, border: `1px solid ${tokens.border}`, background: tokens.secondaryBg, color: tokens.secondaryText, cursor: "pointer" }}
           >
-            {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-          </button>
+            <div>
+              <p style={{ margin: 0, fontSize: 12, letterSpacing: "0.16em", color: "rgba(255,255,255,0.66)" }}>PHRASEAI STUDIO</p>
+              <h1 style={{ margin: "14px 0 0", fontSize: 42, lineHeight: 1.08, letterSpacing: "-0.03em" }}>
+                Write sharper emails in your own voice.
+              </h1>
+              <p style={{ margin: "18px 0 0", maxWidth: 520, fontSize: 16, lineHeight: 1.55, color: "rgba(238,242,255,0.8)" }}>
+                PhraseAI rewrites your drafts, learns from your final edits, and builds a private writing profile so every suggestion feels closer to how you naturally communicate.
+              </p>
+            </div>
 
-          {authError ? <p style={{ marginTop: 12, fontSize: 12, color: "#ef4444" }}>{authError}</p> : null}
-          {authMessage ? <p style={{ marginTop: 12, fontSize: 12, color: tokens.muted }}>{authMessage}</p> : null}
-        </form>
+            <div style={{ display: "grid", gap: 10, marginTop: 30 }}>
+              {[
+                "Context-aware rewrite modes for tone, polish, and grammar",
+                "Private style profile that adapts from your accepted edits",
+                "Live history of learning events and persona shifts",
+              ].map((line) => (
+                <div
+                  key={line}
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    color: "rgba(238,242,255,0.88)",
+                    background: "rgba(255,255,255,0.04)",
+                    fontSize: 13,
+                    lineHeight: 1.4,
+                    transform: "translateY(0)",
+                    transition: "all 220ms ease",
+                  }}
+                >
+                  {line}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section style={{ padding: "36px 30px", display: "flex", alignItems: "center" }}>
+            <form
+              onSubmit={handleAuthSubmit}
+              style={{
+                width: "100%",
+                border: "1px solid rgba(255,255,255,0.14)",
+                borderRadius: 18,
+                background: "rgba(13,19,34,0.78)",
+                padding: 24,
+                transition: "all 250ms ease",
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: 26, letterSpacing: "-0.02em" }}>PhraseAI Access</h2>
+              <p style={{ marginTop: 8, fontSize: 13, color: "rgba(238,242,255,0.68)" }}>
+                {authMode === "signin" ? "Sign in to continue your writing workspace." : "Create your secure workspace account."}
+              </p>
+
+              <label style={{ display: "block", marginTop: 18, fontSize: 11, letterSpacing: "0.08em", color: "rgba(238,242,255,0.66)" }}>EMAIL</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                autoComplete="email"
+                style={{
+                  width: "100%",
+                  marginTop: 8,
+                  padding: "11px 12px",
+                  borderRadius: 11,
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: "rgba(255,255,255,0.06)",
+                  color: "#f8fafc",
+                  outline: "none",
+                  transition: "all 180ms ease",
+                }}
+              />
+
+              <label style={{ display: "block", marginTop: 12, fontSize: 11, letterSpacing: "0.08em", color: "rgba(238,242,255,0.66)" }}>PASSWORD</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                minLength={8}
+                autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+                style={{
+                  width: "100%",
+                  marginTop: 8,
+                  padding: "11px 12px",
+                  borderRadius: 11,
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: "rgba(255,255,255,0.06)",
+                  color: "#f8fafc",
+                  outline: "none",
+                  transition: "all 180ms ease",
+                }}
+              />
+
+              <button
+                type="submit"
+                disabled={authBusy}
+                style={{
+                  marginTop: 16,
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 11,
+                  border: "none",
+                  background: "linear-gradient(90deg, #f5f7ff 0%, #d9e8ff 100%)",
+                  color: "#071327",
+                  fontWeight: 700,
+                  cursor: authBusy ? "not-allowed" : "pointer",
+                  opacity: authBusy ? 0.7 : 1,
+                  transition: "all 180ms ease",
+                }}
+              >
+                {authBusy ? "Working..." : authMode === "signin" ? "Sign In" : "Create Account"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
+                  setAuthError("");
+                  setAuthMessage("");
+                }}
+                style={{
+                  marginTop: 10,
+                  width: "100%",
+                  padding: "9px 12px",
+                  borderRadius: 11,
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "rgba(244,247,255,0.9)",
+                  cursor: "pointer",
+                  transition: "all 180ms ease",
+                }}
+              >
+                {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+              </button>
+
+              {authError ? <p style={{ marginTop: 12, fontSize: 12, color: "#fda4af" }}>{authError}</p> : null}
+              {authMessage ? <p style={{ marginTop: 12, fontSize: 12, color: "rgba(244,247,255,0.7)" }}>{authMessage}</p> : null}
+            </form>
+          </section>
+        </div>
       </div>
     );
   }
@@ -920,11 +1055,57 @@ function App() {
     );
   }
 
+  function renderAccount() {
+    const metadata = session?.user?.user_metadata || {};
+    const accountCreated = session?.user?.created_at ? new Date(session.user.created_at).toLocaleString() : "Unknown";
+
+    return (
+      <div className="rounded-2xl border p-6" style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+            <p className="text-xs" style={{ color: tokens.muted }}>Email</p>
+            <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{session?.user?.email || "Unknown"}</p>
+          </div>
+          <div className="rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+            <p className="text-xs" style={{ color: tokens.muted }}>Member since</p>
+            <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{accountCreated}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
+          <p className="text-xs" style={{ color: tokens.muted }}>Profile details</p>
+          <p className="mt-1 text-sm" style={{ color: tokens.text }}>Display name: {metadata.full_name || metadata.name || "Not set"}</p>
+          <p className="mt-1 text-sm" style={{ color: tokens.soft }}>User ID: {session?.user?.id || "Unavailable"}</p>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveSection("home")}
+            className="rounded-lg border px-3 py-2 text-xs font-semibold"
+            style={{ borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }}
+          >
+            Back to Workspace
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="rounded-lg border px-3 py-2 text-xs font-semibold"
+            style={{ borderColor: tokens.border, color: tokens.secondaryText, backgroundColor: tokens.secondaryBg }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const sectionMeta = {
     home: { title: "Rewrite Emails In Your Voice", sub: "Pick a mode, generate a stronger draft, and refine it inline." },
     history: { title: "Recent Rewrites", sub: "Your saved drafts and rewrites." },
     settings: { title: "App Preferences", sub: "Choose the visual mode for the whole app." },
     "style-profile": { title: "Style Profile", sub: "Define your personal writing voice." },
+    account: { title: "Account", sub: "Manage your personal information and session." },
   };
   const currentMeta = sectionMeta[activeSection] || sectionMeta.home;
 
@@ -943,7 +1124,7 @@ function App() {
         background: tokens.pageBackground,
         color: tokens.text,
         colorScheme: theme,
-        fontFamily: "Inter, Segoe UI, Helvetica Neue, Arial, sans-serif",
+        fontFamily: "Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
         "--placeholder-color": tokens.fieldPlaceholder,
@@ -1070,7 +1251,7 @@ function App() {
 
           <button
             type="button"
-            onClick={handleSignOut}
+            onClick={() => setActiveSection("account")}
             style={{
               width: 40,
               height: 40,
@@ -1085,11 +1266,13 @@ function App() {
               fontSize: 12,
               fontWeight: 700,
               cursor: "pointer",
+              transition: "all 150ms ease",
+              transform: isAccount ? "scale(1.06)" : "scale(1)",
             }}
-            title={`${accountName} (click to sign out)`}
+            title={`${accountName} (account settings)`}
             aria-label="Account"
           >
-            {accountInitials}
+            {isAccount ? <AccountIcon /> : accountInitials}
           </button>
         </div>
       </aside>
@@ -1147,6 +1330,7 @@ function App() {
           {isHistory ? renderHistory() : null}
           {isSettings ? renderSettings() : null}
           {isStyleProfile ? renderStyleProfile() : null}
+          {isAccount ? renderAccount() : null}
         </div>
       </main>
     </div>
