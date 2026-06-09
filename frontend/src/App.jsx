@@ -462,6 +462,13 @@ function App() {
       "Private account-scoped data",
     ];
 
+    const contactItems = [
+      { label: "Support", value: "support@phraseai.app", href: "mailto:support@phraseai.app" },
+      { label: "Partnerships", value: "partners@phraseai.app", href: "mailto:partners@phraseai.app" },
+      { label: "Response", value: "Under 24h (Mon-Fri)", href: null },
+      { label: "Hours", value: "09:00 - 18:00 UTC", href: null },
+    ];
+
     const cardBg = theme === "dark" ? "rgba(0,0,0,0.62)" : "rgba(255,255,255,0.84)";
     const cardBorder = tokens.border;
 
