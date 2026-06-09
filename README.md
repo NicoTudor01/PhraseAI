@@ -2,6 +2,8 @@
 
 PhraseAI is an AI-powered email rewriting tool that helps users improve drafts and will later learn their writing style over time.
 
+Link for the website: https://phraseai-nico.vercel.app/?v=87bcc5e
+
 This repository includes:
 - Frontend: React + Tailwind CSS (Vite)
 - Backend: FastAPI
