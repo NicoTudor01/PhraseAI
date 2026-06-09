@@ -456,435 +456,185 @@ function App() {
   }
 
   if (!session?.access_token) {
-    const trustPoints = [
-      {
-        title: "Adaptive Learning",
-        text: "PhraseAI tracks the changes you accept and uses that signal to tune future rewrites toward your natural style.",
-      },
-      {
-        title: "Context-Aware Rewriting",
-        text: "Switch between professional, smarter, and grammar-focused modes while preserving intent and clarity.",
-      },
-      {
-        title: "Private by Default",
-        text: "Your writing profile is linked to your account and protected by authenticated API routes and row-level policies.",
-      },
+    const highlightItems = [
+      "Smart rewrite modes",
+      "Learning style profile",
+      "Private account-scoped data",
     ];
 
-    const workflowSteps = [
-      {
-        step: "01",
-        title: "Draft",
-        text: "Paste your email draft or compose directly in the workspace.",
-      },
-      {
-        step: "02",
-        title: "Rewrite",
-        text: "Generate a stronger version based on your chosen style mode.",
-      },
-      {
-        step: "03",
-        title: "Finalize",
-        text: "Edit the output, lock in the final message, and save learning signals.",
-      },
-      {
-        step: "04",
-        title: "Improve",
-        text: "Review profile and history pages to monitor how your writing persona evolves.",
-      },
-    ];
-
-    const contactItems = [
-      { label: "Support Email", value: "support@phraseai.app", href: "mailto:support@phraseai.app" },
-      { label: "Sales & Partnerships", value: "partners@phraseai.app", href: "mailto:partners@phraseai.app" },
-      { label: "Response Time", value: "Under 24 hours (Mon-Fri)", href: null },
-      { label: "Live Office Hours", value: "09:00 - 18:00 UTC", href: null },
-    ];
-
-    const storyMedia = [
-      {
-        key: "atelier",
-        title: "Crafted Rewriting",
-        text: "A polished flow from rough draft to final message.",
-        image: "/visuals/story-atelier.svg",
-      },
-      {
-        key: "motion",
-        title: "Learning In Motion",
-        text: "Accepted edits shape each future rewrite.",
-        image: "/visuals/story-motion.svg",
-      },
-      {
-        key: "support",
-        title: "Connected Support",
-        text: "Onboarding and enterprise help one message away.",
-        image: "/visuals/story-contact.svg",
-      },
-    ];
+    const cardBg = theme === "dark" ? "rgba(0,0,0,0.62)" : "rgba(255,255,255,0.84)";
+    const cardBorder = tokens.border;
 
     return (
       <div
         style={{
           minHeight: "100vh",
-          height: "100vh",
-          overflowY: "auto",
-          overflowX: "hidden",
-          scrollSnapType: "y mandatory",
-          scrollBehavior: "smooth",
-          background:
-            "radial-gradient(circle at 12% 10%, rgba(134,197,255,0.2), transparent 28%), radial-gradient(circle at 88% 84%, rgba(120,255,188,0.14), transparent 35%), linear-gradient(160deg, #040810 0%, #0d1a2d 45%, #091120 100%)",
-          color: "#f5f7fb",
-          padding: "24px 18px 40px",
-          fontFamily: "Space Grotesk, Avenir Next, Segoe UI, sans-serif",
-          position: "relative",
+          background: tokens.pageBackground,
+          color: tokens.text,
+          padding: "28px 16px",
+          fontFamily: "Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif",
         }}
       >
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            top: -80,
-            left: -120,
-            width: 360,
-            height: 360,
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(125,196,255,0.34) 0%, rgba(125,196,255,0.03) 70%)",
-            filter: "blur(4px)",
-            pointerEvents: "none",
-            animation: "landing-float 11s ease-in-out infinite",
-          }}
-        />
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            right: -120,
-            top: 220,
-            width: 340,
-            height: 340,
-            borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(106,255,184,0.26) 0%, rgba(106,255,184,0.02) 72%)",
-            filter: "blur(6px)",
-            pointerEvents: "none",
-            animation: "landing-float 14s ease-in-out infinite reverse",
-          }}
-        />
-
-        <div style={{ width: "100%", maxWidth: 1120, margin: "0 auto", position: "relative", zIndex: 1 }}>
+        <div style={{ width: "100%", maxWidth: 980, margin: "0 auto", display: "grid", gap: 14 }}>
           <section
             style={{
-              minHeight: "100vh",
-              scrollSnapAlign: "start",
-              border: "1px solid rgba(255,255,255,0.13)",
-              borderRadius: 24,
-              background: "rgba(8,13,24,0.72)",
-              boxShadow: "0 24px 80px rgba(0,0,0,0.34)",
-              backdropFilter: "blur(10px)",
+              border: `1px solid ${cardBorder}`,
+              borderRadius: 20,
+              background: cardBg,
               overflow: "hidden",
             }}
           >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <div style={{ padding: "42px 36px 34px" }}>
-                <p style={{ margin: 0, fontSize: 12, letterSpacing: "0.16em", color: "rgba(255,255,255,0.68)" }}>PHRASEAI STUDIO</p>
-                <h1 style={{ margin: "14px 0 0", fontSize: "clamp(2rem, 4.5vw, 3.1rem)", lineHeight: 1.05, letterSpacing: "-0.03em" }}>
-                  Write sharper emails in your own voice.
+            <div style={{ padding: "30px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.14em", color: tokens.muted }}>PHRASEAI</p>
+                <h1 style={{ margin: "10px 0 0", fontSize: "clamp(1.8rem, 4vw, 2.6rem)", letterSpacing: "-0.03em", lineHeight: 1.05 }}>
+                  Clear writing in your own voice.
                 </h1>
-                <p style={{ margin: "18px 0 0", maxWidth: 560, fontSize: 16, lineHeight: 1.6, color: "rgba(238,242,255,0.82)" }}>
-                  PhraseAI transforms rough drafts into polished communication while learning from your final edits. The result is an assistant that gets more aligned with every message you send.
+                <p style={{ margin: "12px 0 0", fontSize: 14, lineHeight: 1.6, color: tokens.soft, maxWidth: 560 }}>
+                  Rewrite emails, keep your tone, and let the assistant learn from your final edits.
                 </p>
-                <div style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {[
-                    "Smart Rewrite Modes",
-                    "Learning Style Profile",
-                    "Secure Account-Based Access",
-                  ].map((tag) => (
+
+                <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {highlightItems.map((item) => (
                     <span
-                      key={tag}
+                      key={item}
                       style={{
-                        border: "1px solid rgba(255,255,255,0.16)",
+                        border: `1px solid ${tokens.border}`,
                         borderRadius: 999,
-                        padding: "6px 12px",
+                        padding: "6px 10px",
                         fontSize: 12,
-                        color: "rgba(239,244,255,0.9)",
-                        background: "rgba(255,255,255,0.05)",
-                        transition: "transform 180ms ease, background 180ms ease",
+                        color: tokens.muted,
+                        background: tokens.surface,
                       }}
                     >
-                      {tag}
+                      {item}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div style={{ padding: "30px 26px", borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
-                <form
-                  onSubmit={handleAuthSubmit}
+              <form
+                onSubmit={handleAuthSubmit}
+                style={{
+                  border: `1px solid ${tokens.border}`,
+                  borderRadius: 14,
+                  background: tokens.surface,
+                  padding: 18,
+                }}
+              >
+                <h2 style={{ margin: 0, fontSize: 22, letterSpacing: "-0.02em", color: tokens.text }}>Access Workspace</h2>
+                <p style={{ marginTop: 6, fontSize: 12, color: tokens.muted }}>
+                  {authMode === "signin" ? "Sign in to continue." : "Create your account."}
+                </p>
+
+                <label style={{ display: "block", marginTop: 12, fontSize: 11, letterSpacing: "0.08em", color: tokens.muted }}>EMAIL</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  autoComplete="email"
                   style={{
-                    border: "1px solid rgba(255,255,255,0.16)",
-                    borderRadius: 18,
-                    background: "rgba(13,19,34,0.84)",
-                    padding: 22,
-                    transition: "all 260ms ease",
+                    width: "100%",
+                    marginTop: 6,
+                    padding: "10px 11px",
+                    borderRadius: 10,
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.fieldBg,
+                    color: tokens.fieldText,
+                    outline: "none",
+                  }}
+                />
+
+                <label style={{ display: "block", marginTop: 10, fontSize: 11, letterSpacing: "0.08em", color: tokens.muted }}>PASSWORD</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+                  style={{
+                    width: "100%",
+                    marginTop: 6,
+                    padding: "10px 11px",
+                    borderRadius: 10,
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.fieldBg,
+                    color: tokens.fieldText,
+                    outline: "none",
+                  }}
+                />
+
+                <button
+                  type="submit"
+                  disabled={authBusy}
+                  style={{
+                    marginTop: 12,
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: tokens.primaryBg,
+                    color: tokens.primaryText,
+                    fontWeight: 700,
+                    cursor: authBusy ? "not-allowed" : "pointer",
+                    opacity: authBusy ? 0.7 : 1,
                   }}
                 >
-                  <h2 style={{ margin: 0, fontSize: 26, letterSpacing: "-0.02em" }}>PhraseAI Access</h2>
-                  <p style={{ marginTop: 8, fontSize: 13, color: "rgba(238,242,255,0.68)" }}>
-                    {authMode === "signin" ? "Sign in to continue your writing workspace." : "Create your secure workspace account."}
-                  </p>
+                  {authBusy ? "Working..." : authMode === "signin" ? "Sign In" : "Create Account"}
+                </button>
 
-                  <label style={{ display: "block", marginTop: 18, fontSize: 11, letterSpacing: "0.08em", color: "rgba(238,242,255,0.66)" }}>EMAIL</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    required
-                    autoComplete="email"
-                    style={{
-                      width: "100%",
-                      marginTop: 8,
-                      padding: "11px 12px",
-                      borderRadius: 11,
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      background: "rgba(255,255,255,0.06)",
-                      color: "#f8fafc",
-                      outline: "none",
-                      transition: "all 180ms ease",
-                    }}
-                  />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
+                    setAuthError("");
+                    setAuthMessage("");
+                  }}
+                  style={{
+                    marginTop: 8,
+                    width: "100%",
+                    padding: "9px 12px",
+                    borderRadius: 10,
+                    border: `1px solid ${tokens.border}`,
+                    background: tokens.secondaryBg,
+                    color: tokens.secondaryText,
+                    cursor: "pointer",
+                  }}
+                >
+                  {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+                </button>
 
-                  <label style={{ display: "block", marginTop: 12, fontSize: 11, letterSpacing: "0.08em", color: "rgba(238,242,255,0.66)" }}>PASSWORD</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    required
-                    minLength={8}
-                    autoComplete={authMode === "signin" ? "current-password" : "new-password"}
-                    style={{
-                      width: "100%",
-                      marginTop: 8,
-                      padding: "11px 12px",
-                      borderRadius: 11,
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      background: "rgba(255,255,255,0.06)",
-                      color: "#f8fafc",
-                      outline: "none",
-                      transition: "all 180ms ease",
-                    }}
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={authBusy}
-                    style={{
-                      marginTop: 16,
-                      width: "100%",
-                      padding: "10px 12px",
-                      borderRadius: 11,
-                      border: "none",
-                      background: "linear-gradient(90deg, #f5f7ff 0%, #d9e8ff 100%)",
-                      color: "#071327",
-                      fontWeight: 700,
-                      cursor: authBusy ? "not-allowed" : "pointer",
-                      opacity: authBusy ? 0.7 : 1,
-                      transition: "all 180ms ease",
-                    }}
-                  >
-                    {authBusy ? "Working..." : authMode === "signin" ? "Sign In" : "Create Account"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
-                      setAuthError("");
-                      setAuthMessage("");
-                    }}
-                    style={{
-                      marginTop: 10,
-                      width: "100%",
-                      padding: "9px 12px",
-                      borderRadius: 11,
-                      border: "1px solid rgba(255,255,255,0.18)",
-                      background: "rgba(255,255,255,0.04)",
-                      color: "rgba(244,247,255,0.9)",
-                      cursor: "pointer",
-                      transition: "all 180ms ease",
-                    }}
-                  >
-                    {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-                  </button>
-
-                  {authError ? <p style={{ marginTop: 12, fontSize: 12, color: "#fda4af" }}>{authError}</p> : null}
-                  {authMessage ? <p style={{ marginTop: 12, fontSize: 12, color: "rgba(244,247,255,0.7)" }}>{authMessage}</p> : null}
-                </form>
-              </div>
-            </div>
-
-            <div style={{ padding: "28px 30px 34px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-              <h3 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em" }}>Why teams choose PhraseAI</h3>
-              <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                {trustPoints.map((item) => (
-                  <article
-                    key={item.title}
-                    style={{
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 14,
-                      background: "rgba(255,255,255,0.04)",
-                      padding: 14,
-                      transition: "transform 220ms ease, border-color 220ms ease, background 220ms ease",
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{item.title}</p>
-                    <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.5, color: "rgba(236,241,255,0.78)" }}>{item.text}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ padding: "28px 30px 34px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-              <h3 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em" }}>How the learning flow works</h3>
-              <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-                {workflowSteps.map((item) => (
-                  <div
-                    key={item.step}
-                    style={{
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 14,
-                      background: "linear-gradient(170deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)",
-                      padding: "14px 14px 12px",
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 11, color: "rgba(198,214,255,0.9)", letterSpacing: "0.08em" }}>{item.step}</p>
-                    <p style={{ margin: "8px 0 0", fontSize: 14, fontWeight: 700 }}>{item.title}</p>
-                    <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.45, color: "rgba(236,241,255,0.78)" }}>{item.text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ padding: "28px 30px 34px" }}>
-              <h3 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em" }}>Contact us</h3>
-              <p style={{ margin: "8px 0 0", fontSize: 13, color: "rgba(236,241,255,0.74)", lineHeight: 1.5 }}>
-                Questions, onboarding help, or enterprise requests? Reach our team directly and we will guide you.
-              </p>
-              <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 12 }}>
-                {contactItems.map((item) => (
-                  <div
-                    key={item.label}
-                    style={{
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      borderRadius: 14,
-                      background: "rgba(255,255,255,0.04)",
-                      padding: 14,
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.08em", color: "rgba(194,209,244,0.84)" }}>{item.label}</p>
-                    {item.href ? (
-                      <a
-                        href={item.href}
-                        style={{
-                          marginTop: 8,
-                          display: "inline-block",
-                          fontSize: 14,
-                          color: "#d7e8ff",
-                          textDecoration: "none",
-                          borderBottom: "1px solid rgba(215,232,255,0.45)",
-                          paddingBottom: 1,
-                        }}
-                      >
-                        {item.value}
-                      </a>
-                    ) : (
-                      <p style={{ margin: "8px 0 0", fontSize: 14, color: "#d7e8ff" }}>{item.value}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <p style={{ margin: "18px 0 0", fontSize: 12, color: "rgba(236,241,255,0.56)" }}>
-                By continuing, you agree to use PhraseAI for lawful business communication and accept standard security monitoring.
-              </p>
+                {authError ? <p style={{ marginTop: 10, fontSize: 12, color: "#f87171" }}>{authError}</p> : null}
+                {authMessage ? <p style={{ marginTop: 10, fontSize: 12, color: tokens.muted }}>{authMessage}</p> : null}
+              </form>
             </div>
           </section>
 
           <section
             style={{
-              marginTop: 14,
-              minHeight: "100vh",
-              scrollSnapAlign: "start",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 18,
-              background: "rgba(8,13,24,0.62)",
-              backdropFilter: "blur(8px)",
-              padding: "20px 16px",
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.16em", color: "rgba(214,230,255,0.78)" }}>SCROLL EXPERIENCE</p>
-            <h3 style={{ margin: "8px 0 0", fontSize: 28, letterSpacing: "-0.03em" }}>A premium visual narrative for your front page</h3>
-            <p style={{ margin: "10px 0 0", maxWidth: 760, color: "rgba(230,241,255,0.74)", lineHeight: 1.6, fontSize: 14 }}>
-              These are custom generated visuals for PhraseAI, giving your page that cinematic professional flow while staying original.
-            </p>
-
-            <div style={{ marginTop: 16, display: "grid", gap: 14 }}>
-              {storyMedia.map((item, index) => (
-                <article
-                  key={item.key}
-                  style={{
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    borderRadius: 16,
-                    overflow: "hidden",
-                    background: "rgba(255,255,255,0.03)",
-                    boxShadow: "0 16px 42px rgba(0,0,0,0.28)",
-                  }}
-                >
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-                    <div style={{ padding: "18px 18px 16px" }}>
-                      <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.1em", color: "rgba(194,212,245,0.88)" }}>
-                        {String(index + 1).padStart(2, "0")}
-                      </p>
-                      <h4 style={{ margin: "8px 0 0", fontSize: 22, letterSpacing: "-0.02em" }}>{item.title}</h4>
-                      <p style={{ margin: "10px 0 0", lineHeight: 1.6, fontSize: 14, color: "rgba(229,238,255,0.78)" }}>{item.text}</p>
-                    </div>
-                    <div style={{ minHeight: 220, borderLeft: "1px solid rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                      <img
-                        src={item.image}
-                        alt={`${item.title} visual`}
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transform: "scale(1.02)" }}
-                      />
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section
-            style={{
-              marginTop: 14,
-              minHeight: "36vh",
-              scrollSnapAlign: "start",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 18,
-              background: "rgba(8,13,24,0.62)",
-              backdropFilter: "blur(8px)",
+              border: `1px solid ${cardBorder}`,
+              borderRadius: 16,
+              background: cardBg,
               padding: "14px 16px",
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-              fontSize: 12,
-              color: "rgba(233,240,255,0.76)",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 10,
             }}
           >
-            <span>Built for founders, operators, and client-facing teams.</span>
-            <span>Need help now? Email support@phraseai.app</span>
+            {contactItems.map((item) => (
+              <div key={item.label}>
+                <p style={{ margin: 0, fontSize: 10, letterSpacing: "0.08em", color: tokens.muted }}>{item.label}</p>
+                {item.href ? (
+                  <a href={item.href} style={{ marginTop: 6, display: "inline-block", fontSize: 13, color: tokens.text, textDecoration: "none" }}>
+                    {item.value}
+                  </a>
+                ) : (
+                  <p style={{ margin: "6px 0 0", fontSize: 13, color: tokens.text }}>{item.value}</p>
+                )}
+              </div>
+            ))}
           </section>
         </div>
       </div>
