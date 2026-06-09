@@ -98,6 +98,34 @@ def get_anthropic() -> Anthropic:
     return Anthropic(**client_kwargs)
 
 
+def get_openrouter_base_url() -> str:
+    raw = os.getenv("ANTHROPIC_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    lowered = raw.lower()
+
+    # Accept both https://openrouter.ai/api and https://openrouter.ai/api/v1.
+    if lowered.endswith("/api"):
+        return f"{raw}/v1"
+    return raw
+
+
+def should_use_openrouter() -> bool:
+    base_url = (os.getenv("ANTHROPIC_BASE_URL") or "").lower()
+    api_key = os.getenv("ANTHROPIC_API_KEY") or ""
+    return "openrouter.ai" in base_url or api_key.startswith("sk-or-")
+
+
+def resolve_model_name() -> str:
+    env_model = (os.getenv("LLM_MODEL") or "").strip()
+    if env_model:
+        return env_model
+
+    if should_use_openrouter():
+        # Safe default model on OpenRouter when no explicit model is set.
+        return "openai/gpt-4o-mini"
+
+    return "claude-sonnet-4-20250514"
+
+
 def parse_bearer_token(authorization: str | None) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header.")
@@ -137,7 +165,7 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict:
 
 
 def call_openrouter(prompt: str, model_name: str, max_tokens: int) -> str:
-    base_url = os.getenv("ANTHROPIC_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    base_url = get_openrouter_base_url()
     endpoint = f"{base_url}/chat/completions"
     api_key = os.getenv("ANTHROPIC_API_KEY")
 
@@ -157,6 +185,11 @@ def call_openrouter(prompt: str, model_name: str, max_tokens: int) -> str:
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    site_url = os.getenv("OPENROUTER_SITE_URL", "").strip()
+    app_title = os.getenv("OPENROUTER_APP_TITLE", "PhraseAI")
+    if site_url:
+        headers["HTTP-Referer"] = site_url
+        headers["X-Title"] = app_title
 
     request = urllib_request.Request(
         endpoint,
@@ -393,7 +426,7 @@ def auth_me(current_user: dict = Depends(get_current_user)) -> dict:
 @app.post("/rewrite", response_model=RewriteResponse)
 def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(get_current_user)) -> RewriteResponse:
     user_id = current_user["id"]
-    model_name = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
+    model_name = resolve_model_name()
     max_tokens = int(os.getenv("LLM_MAX_TOKENS", "1200"))
 
     style_profile = get_profile_for_user(user_id)
@@ -419,8 +452,7 @@ def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(get_curr
         f"Draft:\n{payload.draft}"
     )
 
-    base_url = os.getenv("ANTHROPIC_BASE_URL", "").lower()
-    if "openrouter.ai" in base_url:
+    if should_use_openrouter():
         return RewriteResponse(rewritten=call_openrouter(prompt, model_name, max_tokens))
 
     client = get_anthropic()
