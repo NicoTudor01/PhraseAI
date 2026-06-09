@@ -456,181 +456,354 @@ function App() {
   }
 
   if (!session?.access_token) {
+    const trustPoints = [
+      {
+        title: "Adaptive Learning",
+        text: "PhraseAI tracks the changes you accept and uses that signal to tune future rewrites toward your natural style.",
+      },
+      {
+        title: "Context-Aware Rewriting",
+        text: "Switch between professional, smarter, and grammar-focused modes while preserving intent and clarity.",
+      },
+      {
+        title: "Private by Default",
+        text: "Your writing profile is linked to your account and protected by authenticated API routes and row-level policies.",
+      },
+    ];
+
+    const workflowSteps = [
+      {
+        step: "01",
+        title: "Draft",
+        text: "Paste your email draft or compose directly in the workspace.",
+      },
+      {
+        step: "02",
+        title: "Rewrite",
+        text: "Generate a stronger version based on your chosen style mode.",
+      },
+      {
+        step: "03",
+        title: "Finalize",
+        text: "Edit the output, lock in the final message, and save learning signals.",
+      },
+      {
+        step: "04",
+        title: "Improve",
+        text: "Review profile and history pages to monitor how your writing persona evolves.",
+      },
+    ];
+
+    const contactItems = [
+      { label: "Support Email", value: "support@phraseai.app", href: "mailto:support@phraseai.app" },
+      { label: "Sales & Partnerships", value: "partners@phraseai.app", href: "mailto:partners@phraseai.app" },
+      { label: "Response Time", value: "Under 24 hours (Mon-Fri)", href: null },
+      { label: "Live Office Hours", value: "09:00 - 18:00 UTC", href: null },
+    ];
+
     return (
       <div
         style={{
           minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
+          overflowY: "auto",
+          overflowX: "hidden",
           background:
-            "radial-gradient(circle at 8% 15%, rgba(229,204,255,0.12), transparent 30%), radial-gradient(circle at 90% 80%, rgba(117,186,255,0.16), transparent 33%), linear-gradient(150deg, #05070f 0%, #101827 47%, #0b1322 100%)",
+            "radial-gradient(circle at 12% 10%, rgba(134,197,255,0.2), transparent 28%), radial-gradient(circle at 88% 84%, rgba(120,255,188,0.14), transparent 35%), linear-gradient(160deg, #040810 0%, #0d1a2d 45%, #091120 100%)",
           color: "#f5f7fb",
-          padding: 20,
+          padding: "24px 18px 40px",
           fontFamily: "Space Grotesk, Avenir Next, Segoe UI, sans-serif",
+          position: "relative",
         }}
       >
         <div
+          aria-hidden="true"
           style={{
-            width: "100%",
-            maxWidth: 1080,
-            display: "grid",
-            gridTemplateColumns: "1.15fr 0.85fr",
-            border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: 24,
-            overflow: "hidden",
-            background: "rgba(6,10,20,0.68)",
-            boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-            backdropFilter: "blur(8px)",
+            position: "absolute",
+            top: -80,
+            left: -120,
+            width: 360,
+            height: 360,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(125,196,255,0.34) 0%, rgba(125,196,255,0.03) 70%)",
+            filter: "blur(4px)",
+            pointerEvents: "none",
           }}
-        >
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            right: -120,
+            top: 220,
+            width: 340,
+            height: 340,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(106,255,184,0.26) 0%, rgba(106,255,184,0.02) 72%)",
+            filter: "blur(6px)",
+            pointerEvents: "none",
+          }}
+        />
+
+        <div style={{ width: "100%", maxWidth: 1120, margin: "0 auto", position: "relative", zIndex: 1 }}>
           <section
             style={{
-              padding: "46px 46px 42px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              borderRight: "1px solid rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.13)",
+              borderRadius: 24,
+              background: "rgba(8,13,24,0.72)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.34)",
+              backdropFilter: "blur(10px)",
+              overflow: "hidden",
             }}
           >
-            <div>
-              <p style={{ margin: 0, fontSize: 12, letterSpacing: "0.16em", color: "rgba(255,255,255,0.66)" }}>PHRASEAI STUDIO</p>
-              <h1 style={{ margin: "14px 0 0", fontSize: 42, lineHeight: 1.08, letterSpacing: "-0.03em" }}>
-                Write sharper emails in your own voice.
-              </h1>
-              <p style={{ margin: "18px 0 0", maxWidth: 520, fontSize: 16, lineHeight: 1.55, color: "rgba(238,242,255,0.8)" }}>
-                PhraseAI rewrites your drafts, learns from your final edits, and builds a private writing profile so every suggestion feels closer to how you naturally communicate.
-              </p>
-            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <div style={{ padding: "42px 36px 34px" }}>
+                <p style={{ margin: 0, fontSize: 12, letterSpacing: "0.16em", color: "rgba(255,255,255,0.68)" }}>PHRASEAI STUDIO</p>
+                <h1 style={{ margin: "14px 0 0", fontSize: "clamp(2rem, 4.5vw, 3.1rem)", lineHeight: 1.05, letterSpacing: "-0.03em" }}>
+                  Write sharper emails in your own voice.
+                </h1>
+                <p style={{ margin: "18px 0 0", maxWidth: 560, fontSize: 16, lineHeight: 1.6, color: "rgba(238,242,255,0.82)" }}>
+                  PhraseAI transforms rough drafts into polished communication while learning from your final edits. The result is an assistant that gets more aligned with every message you send.
+                </p>
+                <div style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {[
+                    "Smart Rewrite Modes",
+                    "Learning Style Profile",
+                    "Secure Account-Based Access",
+                  ].map((tag) => (
+                    <span
+                      key={tag}
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.16)",
+                        borderRadius: 999,
+                        padding: "6px 12px",
+                        fontSize: 12,
+                        color: "rgba(239,244,255,0.9)",
+                        background: "rgba(255,255,255,0.05)",
+                        transition: "transform 180ms ease, background 180ms ease",
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
 
-            <div style={{ display: "grid", gap: 10, marginTop: 30 }}>
-              {[
-                "Context-aware rewrite modes for tone, polish, and grammar",
-                "Private style profile that adapts from your accepted edits",
-                "Live history of learning events and persona shifts",
-              ].map((line) => (
-                <div
-                  key={line}
+              <div style={{ padding: "30px 26px", borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
+                <form
+                  onSubmit={handleAuthSubmit}
                   style={{
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: 12,
-                    padding: "10px 12px",
-                    color: "rgba(238,242,255,0.88)",
-                    background: "rgba(255,255,255,0.04)",
-                    fontSize: 13,
-                    lineHeight: 1.4,
-                    transform: "translateY(0)",
-                    transition: "all 220ms ease",
+                    border: "1px solid rgba(255,255,255,0.16)",
+                    borderRadius: 18,
+                    background: "rgba(13,19,34,0.84)",
+                    padding: 22,
+                    transition: "all 260ms ease",
                   }}
                 >
-                  {line}
-                </div>
-              ))}
+                  <h2 style={{ margin: 0, fontSize: 26, letterSpacing: "-0.02em" }}>PhraseAI Access</h2>
+                  <p style={{ marginTop: 8, fontSize: 13, color: "rgba(238,242,255,0.68)" }}>
+                    {authMode === "signin" ? "Sign in to continue your writing workspace." : "Create your secure workspace account."}
+                  </p>
+
+                  <label style={{ display: "block", marginTop: 18, fontSize: 11, letterSpacing: "0.08em", color: "rgba(238,242,255,0.66)" }}>EMAIL</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                    autoComplete="email"
+                    style={{
+                      width: "100%",
+                      marginTop: 8,
+                      padding: "11px 12px",
+                      borderRadius: 11,
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      background: "rgba(255,255,255,0.06)",
+                      color: "#f8fafc",
+                      outline: "none",
+                      transition: "all 180ms ease",
+                    }}
+                  />
+
+                  <label style={{ display: "block", marginTop: 12, fontSize: 11, letterSpacing: "0.08em", color: "rgba(238,242,255,0.66)" }}>PASSWORD</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+                    style={{
+                      width: "100%",
+                      marginTop: 8,
+                      padding: "11px 12px",
+                      borderRadius: 11,
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      background: "rgba(255,255,255,0.06)",
+                      color: "#f8fafc",
+                      outline: "none",
+                      transition: "all 180ms ease",
+                    }}
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={authBusy}
+                    style={{
+                      marginTop: 16,
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 11,
+                      border: "none",
+                      background: "linear-gradient(90deg, #f5f7ff 0%, #d9e8ff 100%)",
+                      color: "#071327",
+                      fontWeight: 700,
+                      cursor: authBusy ? "not-allowed" : "pointer",
+                      opacity: authBusy ? 0.7 : 1,
+                      transition: "all 180ms ease",
+                    }}
+                  >
+                    {authBusy ? "Working..." : authMode === "signin" ? "Sign In" : "Create Account"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
+                      setAuthError("");
+                      setAuthMessage("");
+                    }}
+                    style={{
+                      marginTop: 10,
+                      width: "100%",
+                      padding: "9px 12px",
+                      borderRadius: 11,
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      background: "rgba(255,255,255,0.04)",
+                      color: "rgba(244,247,255,0.9)",
+                      cursor: "pointer",
+                      transition: "all 180ms ease",
+                    }}
+                  >
+                    {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+                  </button>
+
+                  {authError ? <p style={{ marginTop: 12, fontSize: 12, color: "#fda4af" }}>{authError}</p> : null}
+                  {authMessage ? <p style={{ marginTop: 12, fontSize: 12, color: "rgba(244,247,255,0.7)" }}>{authMessage}</p> : null}
+                </form>
+              </div>
+            </div>
+
+            <div style={{ padding: "28px 30px 34px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+              <h3 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em" }}>Why teams choose PhraseAI</h3>
+              <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                {trustPoints.map((item) => (
+                  <article
+                    key={item.title}
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,0.04)",
+                      padding: 14,
+                      transition: "transform 220ms ease, border-color 220ms ease, background 220ms ease",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{item.title}</p>
+                    <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.5, color: "rgba(236,241,255,0.78)" }}>{item.text}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ padding: "28px 30px 34px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+              <h3 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em" }}>How the learning flow works</h3>
+              <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+                {workflowSteps.map((item) => (
+                  <div
+                    key={item.step}
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                      background: "linear-gradient(170deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)",
+                      padding: "14px 14px 12px",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 11, color: "rgba(198,214,255,0.9)", letterSpacing: "0.08em" }}>{item.step}</p>
+                    <p style={{ margin: "8px 0 0", fontSize: 14, fontWeight: 700 }}>{item.title}</p>
+                    <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.45, color: "rgba(236,241,255,0.78)" }}>{item.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ padding: "28px 30px 34px" }}>
+              <h3 style={{ margin: 0, fontSize: 20, letterSpacing: "-0.02em" }}>Contact us</h3>
+              <p style={{ margin: "8px 0 0", fontSize: 13, color: "rgba(236,241,255,0.74)", lineHeight: 1.5 }}>
+                Questions, onboarding help, or enterprise requests? Reach our team directly and we will guide you.
+              </p>
+              <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 12 }}>
+                {contactItems.map((item) => (
+                  <div
+                    key={item.label}
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,0.04)",
+                      padding: 14,
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.08em", color: "rgba(194,209,244,0.84)" }}>{item.label}</p>
+                    {item.href ? (
+                      <a
+                        href={item.href}
+                        style={{
+                          marginTop: 8,
+                          display: "inline-block",
+                          fontSize: 14,
+                          color: "#d7e8ff",
+                          textDecoration: "none",
+                          borderBottom: "1px solid rgba(215,232,255,0.45)",
+                          paddingBottom: 1,
+                        }}
+                      >
+                        {item.value}
+                      </a>
+                    ) : (
+                      <p style={{ margin: "8px 0 0", fontSize: 14, color: "#d7e8ff" }}>{item.value}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <p style={{ margin: "18px 0 0", fontSize: 12, color: "rgba(236,241,255,0.56)" }}>
+                By continuing, you agree to use PhraseAI for lawful business communication and accept standard security monitoring.
+              </p>
             </div>
           </section>
 
-          <section style={{ padding: "36px 30px", display: "flex", alignItems: "center" }}>
-            <form
-              onSubmit={handleAuthSubmit}
-              style={{
-                width: "100%",
-                border: "1px solid rgba(255,255,255,0.14)",
-                borderRadius: 18,
-                background: "rgba(13,19,34,0.78)",
-                padding: 24,
-                transition: "all 250ms ease",
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 26, letterSpacing: "-0.02em" }}>PhraseAI Access</h2>
-              <p style={{ marginTop: 8, fontSize: 13, color: "rgba(238,242,255,0.68)" }}>
-                {authMode === "signin" ? "Sign in to continue your writing workspace." : "Create your secure workspace account."}
-              </p>
-
-              <label style={{ display: "block", marginTop: 18, fontSize: 11, letterSpacing: "0.08em", color: "rgba(238,242,255,0.66)" }}>EMAIL</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                autoComplete="email"
-                style={{
-                  width: "100%",
-                  marginTop: 8,
-                  padding: "11px 12px",
-                  borderRadius: 11,
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#f8fafc",
-                  outline: "none",
-                  transition: "all 180ms ease",
-                }}
-              />
-
-              <label style={{ display: "block", marginTop: 12, fontSize: 11, letterSpacing: "0.08em", color: "rgba(238,242,255,0.66)" }}>PASSWORD</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                minLength={8}
-                autoComplete={authMode === "signin" ? "current-password" : "new-password"}
-                style={{
-                  width: "100%",
-                  marginTop: 8,
-                  padding: "11px 12px",
-                  borderRadius: 11,
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#f8fafc",
-                  outline: "none",
-                  transition: "all 180ms ease",
-                }}
-              />
-
-              <button
-                type="submit"
-                disabled={authBusy}
-                style={{
-                  marginTop: 16,
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 11,
-                  border: "none",
-                  background: "linear-gradient(90deg, #f5f7ff 0%, #d9e8ff 100%)",
-                  color: "#071327",
-                  fontWeight: 700,
-                  cursor: authBusy ? "not-allowed" : "pointer",
-                  opacity: authBusy ? 0.7 : 1,
-                  transition: "all 180ms ease",
-                }}
-              >
-                {authBusy ? "Working..." : authMode === "signin" ? "Sign In" : "Create Account"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
-                  setAuthError("");
-                  setAuthMessage("");
-                }}
-                style={{
-                  marginTop: 10,
-                  width: "100%",
-                  padding: "9px 12px",
-                  borderRadius: 11,
-                  border: "1px solid rgba(255,255,255,0.18)",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "rgba(244,247,255,0.9)",
-                  cursor: "pointer",
-                  transition: "all 180ms ease",
-                }}
-              >
-                {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-              </button>
-
-              {authError ? <p style={{ marginTop: 12, fontSize: 12, color: "#fda4af" }}>{authError}</p> : null}
-              {authMessage ? <p style={{ marginTop: 12, fontSize: 12, color: "rgba(244,247,255,0.7)" }}>{authMessage}</p> : null}
-            </form>
+          <section
+            style={{
+              marginTop: 14,
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 18,
+              background: "rgba(8,13,24,0.62)",
+              backdropFilter: "blur(8px)",
+              padding: "14px 16px",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              fontSize: 12,
+              color: "rgba(233,240,255,0.76)",
+            }}
+          >
+            <span>Built for founders, operators, and client-facing teams.</span>
+            <span>Need help now? Email support@phraseai.app</span>
           </section>
         </div>
       </div>
