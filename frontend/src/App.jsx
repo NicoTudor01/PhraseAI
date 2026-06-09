@@ -7,7 +7,13 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const FORCE_LOGIN_ON_VISIT = (import.meta.env.VITE_FORCE_LOGIN_ON_VISIT || "true").toLowerCase() === "true";
 const THEME_STORAGE_KEY = "phraseai-theme";
 const IS_DEV = import.meta.env.DEV;
+const LOGIN_RATE_LIMIT_MAX = 5;
+const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+function getLoginLimitStorageKey(email) {
+  return `phraseai-login-rate:${String(email || "").trim().toLowerCase()}`;
+}
 
 const MODES = [
   { key: "more_professional", label: "More Professional" },
@@ -171,6 +177,7 @@ function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const accountName = session?.user?.email || "Client";
@@ -423,15 +430,85 @@ function App() {
         }
         setAuthMessage("Account created. Check your email for confirmation if required, then sign in.");
       } else {
+        const normalizedEmail = email.trim().toLowerCase();
+        const storageKey = getLoginLimitStorageKey(normalizedEmail);
+        const now = Date.now();
+        let attempts = 0;
+        let windowStart = now;
+
+        try {
+          const raw = window.localStorage.getItem(storageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            attempts = Number(parsed.attempts) || 0;
+            windowStart = Number(parsed.windowStart) || now;
+          }
+        } catch {
+          attempts = 0;
+          windowStart = now;
+        }
+
+        if (now - windowStart >= LOGIN_RATE_LIMIT_WINDOW_MS) {
+          attempts = 0;
+          windowStart = now;
+        }
+
+        if (attempts >= LOGIN_RATE_LIMIT_MAX) {
+          const waitSeconds = Math.ceil((LOGIN_RATE_LIMIT_WINDOW_MS - (now - windowStart)) / 1000);
+          throw new Error(`Too many login attempts for this email. Try again in ${waitSeconds} seconds.`);
+        }
+
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) {
+          const nextAttempts = attempts + 1;
+          try {
+            window.localStorage.setItem(storageKey, JSON.stringify({ attempts: nextAttempts, windowStart }));
+          } catch {
+            // Ignore storage errors so auth can still function.
+          }
           throw signInError;
+        }
+
+        try {
+          window.localStorage.removeItem(storageKey);
+        } catch {
+          // Ignore storage errors so auth can still function.
         }
       }
     } catch (err) {
       setAuthError(err.message || "Authentication failed.");
     } finally {
       setAuthBusy(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!supabase) {
+      setAuthError("Supabase client is not configured.");
+      return;
+    }
+
+    if (!email.trim()) {
+      setAuthError("Enter your email first, then use forgot password.");
+      return;
+    }
+
+    setResetBusy(true);
+    setAuthError("");
+    setAuthMessage("");
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin,
+      });
+      if (resetError) {
+        throw resetError;
+      }
+      setAuthMessage("Password reset email sent. Check your inbox.");
+    } catch (err) {
+      setAuthError(err.message || "Could not send password reset email.");
+    } finally {
+      setResetBusy(false);
     }
   }
 
@@ -572,6 +649,26 @@ function App() {
                     outline: "none",
                   }}
                 />
+
+                {authMode === "signin" ? (
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={resetBusy}
+                    style={{
+                      marginTop: 8,
+                      border: "none",
+                      background: "transparent",
+                      color: tokens.muted,
+                      fontSize: 12,
+                      padding: 0,
+                      cursor: resetBusy ? "not-allowed" : "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    {resetBusy ? "Sending reset email..." : "Forgot your password?"}
+                  </button>
+                ) : null}
 
                 <button
                   type="submit"
