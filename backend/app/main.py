@@ -131,6 +131,17 @@ def resolve_model_name() -> str:
     return "claude-sonnet-4-20250514"
 
 
+def resolve_openrouter_fallback_models() -> list[str]:
+    return [
+        item.strip()
+        for item in os.getenv(
+            "OPENROUTER_FALLBACK_MODELS",
+            "meta-llama/llama-3.1-8b-instruct:free,qwen/qwen-2.5-7b-instruct:free,mistralai/mistral-7b-instruct:free,openrouter/auto",
+        ).split(",")
+        if item.strip()
+    ]
+
+
 def parse_bearer_token(authorization: str | None) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header.")
@@ -228,14 +239,7 @@ def call_openrouter(prompt: str, model_name: str, max_tokens: int) -> str:
 
 
 def call_openrouter_with_retries(prompt: str, preferred_model: str, max_tokens: int) -> str:
-    configured_fallbacks = [
-        item.strip()
-        for item in os.getenv(
-            "OPENROUTER_FALLBACK_MODELS",
-            "meta-llama/llama-3.1-8b-instruct:free,qwen/qwen-2.5-7b-instruct:free,mistralai/mistral-7b-instruct:free,openrouter/auto",
-        ).split(",")
-        if item.strip()
-    ]
+    configured_fallbacks = resolve_openrouter_fallback_models()
 
     ordered_models: list[str] = []
     for candidate in [preferred_model, *configured_fallbacks]:
@@ -502,6 +506,17 @@ def root() -> dict:
 @app.get("/auth/me")
 def auth_me(current_user: dict = Depends(get_current_user)) -> dict:
     return {"user": current_user}
+
+
+@app.get("/ai/model")
+def ai_model_info() -> dict:
+    provider = "openrouter" if should_use_openrouter() else "anthropic"
+    model = resolve_model_name()
+    return {
+        "provider": provider,
+        "model": model,
+        "openrouter_fallback_models": resolve_openrouter_fallback_models() if provider == "openrouter" else [],
+    }
 
 
 @app.post("/rewrite", response_model=RewriteResponse)

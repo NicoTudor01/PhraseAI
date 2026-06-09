@@ -221,6 +221,7 @@ function App() {
   const [resetBusy, setResetBusy] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [aiInfo, setAiInfo] = useState(null);
   const loginAttemptsRef = useRef(new Map());
   const accountName = session?.user?.email || "Client";
   const accountInitials = getInitials(accountName);
@@ -234,6 +235,28 @@ function App() {
     } catch {
       // Ignore storage failures.
     }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadAiInfo() {
+      try {
+        const response = await fetch(`${API_URL}/ai/model`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (active) {
+          setAiInfo(data);
+        }
+      } catch {
+        // Ignore model info failures in UI; core app should stay usable.
+      }
+    }
+
+    loadAiInfo();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -634,6 +657,12 @@ function App() {
                 <p style={{ margin: "12px 0 0", fontSize: 14, lineHeight: 1.6, color: tokens.soft, maxWidth: 560 }}>
                   Rewrite emails, keep your tone, and let the assistant learn from your final edits.
                 </p>
+
+                {aiInfo?.model ? (
+                  <p style={{ margin: "10px 0 0", fontSize: 12, color: tokens.muted }}>
+                    AI model: {aiInfo.provider || "unknown"} / {aiInfo.model}
+                  </p>
+                ) : null}
 
                 <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {highlightItems.map((item) => (
@@ -1513,6 +1542,11 @@ function App() {
               </p>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {aiInfo?.model ? (
+                <span style={{ fontSize: 11, color: tokens.soft, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  AI: {aiInfo.provider || "unknown"} / {aiInfo.model}
+                </span>
+              ) : null}
               <span style={{ fontSize: 12, color: tokens.muted, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {session?.user?.email || "Signed in"}
               </span>
