@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000" : "https://phraseai-production.up.railway.app");
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const FORCE_LOGIN_ON_VISIT = (import.meta.env.VITE_FORCE_LOGIN_ON_VISIT || "true").toLowerCase() === "true";
@@ -11,8 +11,8 @@ const LOGIN_RATE_LIMIT_MAX = 5;
 const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-function getLoginLimitStorageKey(email) {
-  return `phraseai-login-rate:${String(email || "").trim().toLowerCase()}`;
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 const MODES = [
@@ -180,6 +180,7 @@ function App() {
   const [resetBusy, setResetBusy] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const loginAttemptsRef = useRef(new Map());
   const accountName = session?.user?.email || "Client";
   const accountInitials = getInitials(accountName);
 
@@ -430,23 +431,11 @@ function App() {
         }
         setAuthMessage("Account created. Check your email for confirmation if required, then sign in.");
       } else {
-        const normalizedEmail = email.trim().toLowerCase();
-        const storageKey = getLoginLimitStorageKey(normalizedEmail);
+        const normalizedEmail = normalizeEmail(email);
         const now = Date.now();
-        let attempts = 0;
-        let windowStart = now;
-
-        try {
-          const raw = window.localStorage.getItem(storageKey);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            attempts = Number(parsed.attempts) || 0;
-            windowStart = Number(parsed.windowStart) || now;
-          }
-        } catch {
-          attempts = 0;
-          windowStart = now;
-        }
+        const previous = loginAttemptsRef.current.get(normalizedEmail) || { attempts: 0, windowStart: now };
+        let attempts = Number(previous.attempts) || 0;
+        let windowStart = Number(previous.windowStart) || now;
 
         if (now - windowStart >= LOGIN_RATE_LIMIT_WINDOW_MS) {
           attempts = 0;
@@ -460,20 +449,14 @@ function App() {
 
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) {
-          const nextAttempts = attempts + 1;
-          try {
-            window.localStorage.setItem(storageKey, JSON.stringify({ attempts: nextAttempts, windowStart }));
-          } catch {
-            // Ignore storage errors so auth can still function.
+          const shouldCountAttempt = /invalid login credentials/i.test(signInError.message || "");
+          if (shouldCountAttempt) {
+            loginAttemptsRef.current.set(normalizedEmail, { attempts: attempts + 1, windowStart });
           }
           throw signInError;
         }
 
-        try {
-          window.localStorage.removeItem(storageKey);
-        } catch {
-          // Ignore storage errors so auth can still function.
-        }
+        loginAttemptsRef.current.delete(normalizedEmail);
       }
     } catch (err) {
       setAuthError(err.message || "Authentication failed.");
@@ -504,6 +487,8 @@ function App() {
       if (resetError) {
         throw resetError;
       }
+
+      loginAttemptsRef.current.delete(normalizeEmail(email));
       setAuthMessage("Password reset email sent. Check your inbox.");
     } catch (err) {
       setAuthError(err.message || "Could not send password reset email.");
