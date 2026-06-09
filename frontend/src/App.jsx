@@ -154,6 +154,46 @@ function getInitials(value) {
   return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
+function finalizeSentence(value) {
+  const cleaned = String(value || "").replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  const normalized = cleaned.length > 1 ? `${cleaned[0].toUpperCase()}${cleaned.slice(1)}` : cleaned.toUpperCase();
+  return /[.!?]$/.test(normalized) ? normalized : `${normalized}.`;
+}
+
+function localRewriteFallback(draftValue, selectedMode, contextValue) {
+  let text = finalizeSentence(draftValue);
+  if (!text) return "";
+
+  const replacements = [
+    [/\bu\b/gi, "you"],
+    [/\bur\b/gi, "your"],
+    [/\bpls\b/gi, "please"],
+    [/\bthx\b/gi, "thanks"],
+    [/\bim\b/gi, "I am"],
+    [/\bdont\b/gi, "do not"],
+    [/\bcant\b/gi, "cannot"],
+    [/\bwont\b/gi, "will not"],
+  ];
+
+  replacements.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement);
+  });
+
+  if (selectedMode === "fix_grammar") {
+    return text;
+  }
+
+  if (selectedMode === "more_professional") {
+    const polished = text.replace(/\b(hey|hi)\b/gi, "Hello");
+    const withContext = contextValue?.trim() ? `${polished} I have incorporated the provided context.` : polished;
+    return /thank you\.$/i.test(withContext) ? withContext : `${withContext} Thank you.`;
+  }
+
+  const withContext = contextValue?.trim() ? `${text} This reflects the additional context provided.` : text;
+  return `${withContext} This version improves clarity and strengthens the message.`;
+}
+
 function App() {
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
@@ -344,7 +384,20 @@ function App() {
       setLastAiOutput(data.rewritten || "");
       setLearnMessage("");
     } catch (err) {
-      setError(err.message || "Unexpected rewrite error.");
+      const message = err?.message || "Unexpected rewrite error.";
+      const authLikeFailure = /authorization|auth token|logged in|401/i.test(message);
+
+      if (!authLikeFailure) {
+        const fallback = localRewriteFallback(draft, mode, contextText);
+        if (fallback) {
+          setRewritten(fallback);
+          setLastAiOutput(fallback);
+          setError("AI service is temporarily unavailable. Displaying a safe fallback rewrite.");
+          return;
+        }
+      }
+
+      setError(message);
     } finally {
       setLoading(false);
     }
