@@ -125,8 +125,8 @@ def resolve_model_name() -> str:
         return env_model
 
     if should_use_openrouter():
-        # Use provider-side routing by default for best availability.
-        return "openrouter/auto"
+        # Prefer a broadly available free model by default.
+        return (os.getenv("OPENROUTER_DEFAULT_MODEL") or "meta-llama/llama-3.1-8b-instruct:free").strip()
 
     return "claude-sonnet-4-20250514"
 
@@ -232,7 +232,7 @@ def call_openrouter_with_retries(prompt: str, preferred_model: str, max_tokens: 
         item.strip()
         for item in os.getenv(
             "OPENROUTER_FALLBACK_MODELS",
-            "openrouter/auto,meta-llama/llama-3.1-8b-instruct:free,qwen/qwen-2.5-7b-instruct:free",
+            "meta-llama/llama-3.1-8b-instruct:free,qwen/qwen-2.5-7b-instruct:free,mistralai/mistral-7b-instruct:free,openrouter/auto",
         ).split(",")
         if item.strip()
     ]
