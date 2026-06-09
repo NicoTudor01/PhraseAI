@@ -124,8 +124,8 @@ def resolve_model_name() -> str:
         return env_model
 
     if should_use_openrouter():
-        # Safe default model on OpenRouter when no explicit model is set.
-        return "openai/gpt-4o-mini"
+        # Use provider-side routing by default for best availability.
+        return "openrouter/auto"
 
     return "claude-sonnet-4-20250514"
 
@@ -224,6 +224,35 @@ def call_openrouter(prompt: str, model_name: str, max_tokens: int) -> str:
         raise HTTPException(status_code=502, detail="AI provider returned empty output.")
 
     return content.strip()
+
+
+def call_openrouter_with_retries(prompt: str, preferred_model: str, max_tokens: int) -> str:
+    configured_fallbacks = [
+        item.strip()
+        for item in os.getenv(
+            "OPENROUTER_FALLBACK_MODELS",
+            "openrouter/auto,meta-llama/llama-3.1-8b-instruct:free,qwen/qwen-2.5-7b-instruct:free",
+        ).split(",")
+        if item.strip()
+    ]
+
+    ordered_models: list[str] = []
+    for candidate in [preferred_model, *configured_fallbacks]:
+        if candidate and candidate not in ordered_models:
+            ordered_models.append(candidate)
+
+    last_error: HTTPException | None = None
+    for model_name in ordered_models:
+        try:
+            return call_openrouter(prompt, model_name, max_tokens)
+        except HTTPException as exc:
+            last_error = exc
+            continue
+
+    if last_error is not None:
+        raise last_error
+
+    raise HTTPException(status_code=500, detail="Rewrite failed: no OpenRouter model candidates available.")
 
 
 def mode_instruction(mode: str) -> str:
@@ -509,7 +538,7 @@ def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(get_curr
 
     try:
         if should_use_openrouter():
-            return RewriteResponse(rewritten=call_openrouter(prompt, model_name, max_tokens))
+            return RewriteResponse(rewritten=call_openrouter_with_retries(prompt, model_name, max_tokens))
 
         client = get_anthropic()
         message = client.messages.create(
