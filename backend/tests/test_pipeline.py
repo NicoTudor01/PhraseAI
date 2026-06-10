@@ -10,11 +10,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.main import (
     LearnRequest,
     RewriteRequest,
+    StyleFeedbackRequest,
+    adjust_profile_from_feedback,
+    apply_style_feedback,
+    build_style_system_context,
     build_rewrite_prompt,
     call_openrouter,
     classify_provider_error,
+    extract_style_signals,
     env_flag,
+    finalize_email_history,
+    get_style_data_for_user,
+    persist_email_history,
     profile_prompt_context,
+    profile_completeness,
     provider_error_status,
     resolve_model_name,
     rewrite_email,
@@ -81,34 +90,303 @@ class PipelineTests(unittest.TestCase):
         self.assertNotIn("Authenticated user", prompt)
         self.assertIn("<user_draft>", prompt)
         self.assertIn("<user_context>", prompt)
+        system_context = build_style_system_context(profile)
+        self.assertIn("avg_sentence_length", system_context)
+        self.assertNotIn("private prior email", system_context)
+        self.assertNotIn("user_id", system_context)
 
     def test_profile_prompt_context_contains_only_derived_style_data(self):
         context = profile_prompt_context(
             {
                 "guidance": ["Be direct."],
                 "stats": {"learned_examples": 2},
+                "preferences": {"phrase_counts": {"sensitive project": 1}},
                 "recent_examples": [{"final_excerpt": "sensitive"}],
             }
         )
 
         self.assertEqual(context["learned_examples"], 2)
         self.assertNotIn("recent_examples", context)
+        self.assertNotIn("phrase_counts", context["preferences"])
 
-    def test_learning_update_increments_and_preserves_bounded_history(self):
+    def test_learning_update_builds_rich_profile_and_grows_confidence(self):
         payload = LearnRequest(
             mode="fix_grammar",
             draft="hi there",
             ai_output="Hi there.",
-            final_version="Hi there! Thanks!",
+            final_version="Hi there! Please send the revised plan when ready.\nThanks!",
+        )
+        first = update_profile_from_feedback({}, payload)
+        profile = update_profile_from_feedback(first, payload)
+
+        self.assertEqual(profile["stats"]["learned_examples"], 2)
+        self.assertEqual(profile["persona"]["energy"], "high")
+        self.assertEqual(len(profile["recent_examples"]), 2)
+        required = {
+            "tone_formal_casual",
+            "average_sentence_length",
+            "vocabulary_richness",
+            "punctuation_patterns",
+            "preferred_openers",
+            "preferred_closers",
+            "top_recurring_phrases",
+            "language",
+        }
+        self.assertTrue(required.issubset(profile["traits"]))
+        self.assertGreater(
+            profile["traits"]["average_sentence_length"]["confidence"],
+            first["traits"]["average_sentence_length"]["confidence"],
+        )
+        self.assertGreater(profile_completeness(profile), 0)
+
+    def test_first_and_very_short_email_keep_low_bounded_confidence(self):
+        payload = LearnRequest(
+            mode="fix_grammar",
+            draft="ok",
+            ai_output="Okay.",
+            final_version="Thanks!",
         )
         profile = update_profile_from_feedback({}, payload)
 
         self.assertEqual(profile["stats"]["learned_examples"], 1)
-        self.assertEqual(profile["persona"]["energy"], "high")
-        self.assertEqual(len(profile["recent_examples"]), 1)
+        self.assertTrue(extract_style_signals(payload.final_version)["is_very_short"])
+        self.assertEqual(profile["preferences"]["top_recurring_phrases"], [])
+        for trait in profile["traits"].values():
+            self.assertGreaterEqual(trait["confidence"], 0)
+            self.assertLessEqual(trait["confidence"], 1)
+        self.assertLess(profile["traits"]["average_sentence_length"]["confidence"], 0.1)
+
+    def test_language_shift_is_explicit_and_reduces_language_certainty(self):
+        english = LearnRequest(
+            mode="more_professional",
+            draft="hello",
+            ai_output="Hello.",
+            final_version="Hello, please send the report and the plan. Thank you.",
+        )
+        portuguese = LearnRequest(
+            mode="more_professional",
+            draft="ola",
+            ai_output="Olá.",
+            final_version="Olá, por favor envie o relatório para você e para nós. Obrigado.",
+        )
+        first = update_profile_from_feedback({}, english)
+        shifted = update_profile_from_feedback(first, portuguese)
+
+        self.assertTrue(shifted["language_observations"]["shift_detected"])
+        self.assertEqual(shifted["language_observations"]["latest"], "pt")
+        self.assertLessEqual(
+            shifted["traits"]["language"]["confidence"],
+            first["traits"]["language"]["confidence"],
+        )
+
+    def test_feedback_reinforces_or_discounts_confidence(self):
+        payload = LearnRequest(
+            mode="fix_grammar",
+            draft="hello there",
+            ai_output="Hello there.",
+            final_version="Hello there. Thank you.",
+        )
+        profile = update_profile_from_feedback({}, payload)
+        good = adjust_profile_from_feedback(profile, "good")
+        off = adjust_profile_from_feedback(profile, "off")
+        baseline = profile["traits"]["tone_formal_casual"]["confidence"]
+
+        self.assertGreater(good["traits"]["tone_formal_casual"]["confidence"], baseline)
+        self.assertLess(off["traits"]["tone_formal_casual"]["confidence"], baseline)
+
+
+class FakeResponse:
+    def __init__(self, data=None):
+        self.data = data or []
+
+
+class FakeTable:
+    def __init__(self, name, responses, calls):
+        self.name = name
+        self.responses = responses
+        self.calls = calls
+
+    def __getattr__(self, operation):
+        def record(*args, **kwargs):
+            self.calls.append((self.name, operation, args, kwargs))
+            return self
+
+        return record
+
+    def execute(self):
+        self.calls.append((self.name, "execute", (), {}))
+        queue = self.responses.setdefault(self.name, [])
+        return FakeResponse(queue.pop(0) if queue else [])
+
+
+class FakeSupabase:
+    def __init__(self, responses=None):
+        self.responses = responses or {}
+        self.calls = []
+
+    def table(self, name):
+        self.calls.append((name, "table", (), {}))
+        return FakeTable(name, self.responses, self.calls)
+
+
+class PersistenceTests(unittest.TestCase):
+    def test_rewrite_and_finalization_helpers_scope_by_user(self):
+        supabase = FakeSupabase(
+            {
+                "email_history": [
+                    [{"id": 7}],
+                    [{"id": 7, "feedback": {"source": "provider"}}],
+                    [{"id": 7}],
+                ]
+            }
+        )
+        rewrite = RewriteRequest(draft="Original", mode="fix_grammar")
+        learned = LearnRequest(
+            mode="fix_grammar",
+            draft="Original",
+            ai_output="Generated.",
+            final_version="Final.",
+        )
+
+        persist_email_history(
+            supabase,
+            "user-123",
+            rewrite,
+            "Generated.",
+            source="provider",
+            request_id="req-1",
+        )
+        history_id = finalize_email_history(
+            supabase,
+            "user-123",
+            learned,
+            influenced_traits=["tone_formal_casual"],
+        )
+
+        self.assertEqual(history_id, 7)
+        scoped_filters = [
+            call for call in supabase.calls if call[1] == "eq" and call[2] == ("user_id", "user-123")
+        ]
+        self.assertGreaterEqual(len(scoped_filters), 2)
+
+    def test_feedback_helper_scopes_profile_and_history_queries(self):
+        base = update_profile_from_feedback(
+            {},
+            LearnRequest(
+                mode="fix_grammar",
+                draft="hello",
+                ai_output="Hello.",
+                final_version="Hello, please send the report. Thank you.",
+            ),
+        )
+        supabase = FakeSupabase(
+            {
+                "style_profiles": [
+                    [{"profile": base}],
+                    [{"profile": base, "last_updated": "now"}],
+                ],
+                "style_tags": [[], [{"tags": ["formal"], "updated_at": "now"}]],
+                "persona_snapshots": [[]],
+                "email_history": [
+                    [{"feedback": {"source": "provider"}}],
+                    [],
+                    [{"id": 4, "feedback": {}, "influenced_traits": []}],
+                ],
+            }
+        )
+
+        data = apply_style_feedback(
+            supabase,
+            "user-123",
+            StyleFeedbackRequest(rating="off", history_id=4),
+        )
+
+        self.assertIn("profile", data)
+        self.assertTrue(
+            all(
+                any(
+                    later[1] == "eq" and later[2] == ("user_id", "user-123")
+                    for later in supabase.calls[index + 1 :]
+                )
+                for index, call in enumerate(supabase.calls)
+                if call[1] in {"select", "update"} and call[0] in {"style_profiles", "email_history"}
+            )
+        )
+
+    def test_style_aggregate_returns_snapshots_and_complete_history(self):
+        profile = update_profile_from_feedback(
+            {},
+            LearnRequest(
+                mode="fix_grammar",
+                draft="hello",
+                ai_output="Hello.",
+                final_version="Hello, please send the report. Thank you.",
+            ),
+        )
+        history_row = {
+            "id": 9,
+            "original_text": "hello",
+            "generated_rewrite": "Hello.",
+            "final_version": "Hello, please send the report. Thank you.",
+            "feedback": {},
+            "influenced_traits": ["tone_formal_casual"],
+        }
+        snapshot_row = {"id": 3, "style": profile, "completeness": 0.4}
+        supabase = FakeSupabase(
+            {
+                "style_profiles": [[{"profile": profile, "last_updated": "now"}]],
+                "style_tags": [[{"tags": ["formal"], "updated_at": "now"}]],
+                "email_history": [[history_row]],
+                "persona_snapshots": [[snapshot_row]],
+            }
+        )
+
+        data = get_style_data_for_user(supabase, "user-123")
+
+        self.assertEqual(data["history"][0]["original_text"], "hello")
+        self.assertEqual(data["history"][0]["final_version"], history_row["final_version"])
+        self.assertEqual(data["snapshots"][0]["id"], 3)
+        self.assertTrue(
+            any(call[0] == "email_history" and call[1] == "range" for call in supabase.calls)
+        )
+        self.assertTrue(
+            any(call[0] == "persona_snapshots" and call[1] == "range" for call in supabase.calls)
+        )
 
 
 class RewriteRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_successful_rewrite_injects_system_profile_and_persists_history(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        payload = RewriteRequest(draft="Please send the confidential Zephyr update.", mode="fix_grammar")
+        profile = update_profile_from_feedback(
+            {},
+            LearnRequest(
+                mode="fix_grammar",
+                draft="hello",
+                ai_output="Hello.",
+                final_version="Hello, please send the report. Thank you.",
+            ),
+        )
+        provider = AsyncMock(return_value="Please send the confidential Zephyr update.")
+        persist = MagicMock()
+        supabase = MagicMock()
+
+        with (
+            patch("app.main.get_profile_for_user_async", new=AsyncMock(return_value=profile)),
+            patch("app.main.call_llm_rewrite", new=provider),
+            patch("app.main.get_supabase", return_value=supabase),
+            patch("app.main.persist_email_history", new=persist),
+        ):
+            response = await rewrite_email(payload, {"id": "user-123"})
+
+        self.assertEqual(response.source, "provider")
+        system_context = provider.await_args.args[3]
+        self.assertIn("<derived_style_profile>", system_context)
+        self.assertNotIn("zephyr", system_context.lower())
+        self.assertEqual(persist.call_args.args[1], "user-123")
+        self.assertEqual(persist.call_args.args[3], response.rewritten)
+
     # TESTER: [TEST CASE] Provider billing failures must degrade through the backend, never the browser.
     async def test_provider_billing_failure_returns_categorized_backend_fallback(self):
         from unittest.mock import AsyncMock, patch
@@ -124,6 +402,8 @@ class RewriteRouteTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("app.main.get_profile_for_user_async", new=AsyncMock(return_value={})),
             patch("app.main.call_llm_rewrite", new=AsyncMock(side_effect=BillingError())),
+            patch("app.main.get_supabase"),
+            patch("app.main.persist_email_history"),
             patch.dict("os.environ", {"ENABLE_LOCAL_REWRITE_FALLBACK": "true"}),
         ):
             response = await rewrite_email(payload, {"id": "test-user"})
@@ -146,6 +426,8 @@ class RewriteRouteTests(unittest.IsolatedAsyncioTestCase):
                 with (
                     patch("app.main.get_profile_for_user_async", new=AsyncMock(return_value={})),
                     patch("app.main.call_llm_rewrite", new=AsyncMock(side_effect=error)),
+                    patch("app.main.get_supabase"),
+                    patch("app.main.persist_email_history"),
                     patch.dict("os.environ", {"ENABLE_LOCAL_REWRITE_FALLBACK": "true"}),
                 ):
                     response = await rewrite_email(payload, {"id": "test-user"})
@@ -186,6 +468,8 @@ class RewriteRouteTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("app.main.get_profile_for_user_async", new=AsyncMock(return_value={})),
             patch("app.main.call_llm_rewrite", new=AsyncMock(side_effect=AuthenticationError())),
+            patch("app.main.get_supabase"),
+            patch("app.main.persist_email_history"),
             patch.dict("os.environ", {"ENABLE_LOCAL_REWRITE_FALLBACK": "true"}),
         ):
             response = await rewrite_email(payload, {"id": "test-user"})

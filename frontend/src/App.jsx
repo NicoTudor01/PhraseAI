@@ -10,7 +10,6 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const FORCE_LOGIN_ON_VISIT = (import.meta.env.VITE_FORCE_LOGIN_ON_VISIT || "false").toLowerCase() === "true";
 const MAX_DRAFT_CHARS = 12000;
 const MAX_CONTEXT_CHARS = 8000;
-const THEME_STORAGE_KEY = "phraseai-theme";
 const IS_DEV = import.meta.env.DEV;
 const LOGIN_RATE_LIMIT_MAX = 5;
 const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
@@ -207,6 +206,215 @@ function getInitials(value) {
   return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
+// FRONTEND: Normalize the authenticated aggregate while allowing additive backend contract evolution.
+function normalizeStyleData(payload = {}) {
+  const currentStyle = payload.current_style || payload.profile || payload.style_profile || {};
+  const personaSnapshots = payload.persona_snapshots || payload.snapshots || [];
+  const sortedSnapshots = Array.isArray(personaSnapshots)
+    ? [...personaSnapshots].sort((left, right) => {
+        const leftTime = new Date(left.captured_at || left.created_at || 0).getTime();
+        const rightTime = new Date(right.captured_at || right.created_at || 0).getTime();
+        return leftTime - rightTime;
+      })
+    : [];
+  const emailHistory = payload.email_history || payload.history || [];
+  const styleTags = payload.style_tags || payload.tags || [];
+  const latestSnapshot = sortedSnapshots[sortedSnapshots.length - 1] || {};
+  const learnedExamples = Number(currentStyle?.stats?.learned_examples || emailHistory.length || 0);
+  const rawStrength =
+    payload.style_strength ??
+    payload.completeness ??
+    latestSnapshot.completeness ??
+    Math.min(1, learnedExamples / 10);
+  const normalizedStrength = Number(rawStrength);
+
+  return {
+    currentStyle,
+    personaSnapshots: sortedSnapshots,
+    emailHistory: Array.isArray(emailHistory) ? emailHistory : [],
+    styleTags: Array.isArray(styleTags) ? styleTags : [],
+    styleStrength: Number.isFinite(normalizedStrength)
+      ? Math.max(0, Math.min(1, normalizedStrength > 1 ? normalizedStrength / 100 : normalizedStrength))
+      : 0,
+    lastUpdated: payload.last_updated || payload.updated_at || currentStyle?.stats?.last_learned_at || "",
+    personaSummary: payload.persona_summary || payload.summary || "",
+  };
+}
+
+function titleCase(value) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatDate(value, options = {}) {
+  if (!value) return "Recently";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Recently";
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: options.short ? undefined : "numeric",
+  });
+}
+
+// FRONTEND: Convert backend persona fields into confidence-bearing nodes for the custom map.
+function getPersonaTraits(style = {}, tags = []) {
+  const persona = style.persona || {};
+  const confidences = persona.confidence || persona.confidences || style.confidence || {};
+  const rawTraits = Array.isArray(persona.traits) ? persona.traits : [];
+  const learnedTraits = Object.entries(style.traits || {}).map(([key, trait]) => ({
+    label:
+      key === "tone_formal_casual"
+        ? trait?.value
+        : key === "average_sentence_length"
+          ? "sentence rhythm"
+          : key === "vocabulary_richness"
+            ? "word variety"
+            : key === "punctuation_patterns"
+              ? "punctuation"
+              : key === "preferred_openers"
+                ? "openings"
+                : key === "preferred_closers"
+                  ? "sign-offs"
+                  : key === "top_recurring_phrases"
+                    ? "signature phrases"
+                    : key,
+    category: key,
+    confidence: trait?.confidence,
+  }));
+  const labeledTraits = ["formality", "directness", "energy"]
+    .filter((key) => persona[key])
+    .map((key) => ({ label: persona[key], category: key }));
+  const tagTraits = tags.map((tag) => ({ label: tag, category: "trait" }));
+  const candidates = [...learnedTraits, ...labeledTraits, ...rawTraits, ...tagTraits];
+  const seen = new Set();
+
+  return candidates
+    .map((trait, index) => {
+      const value = typeof trait === "object" ? trait : { label: trait };
+      const label = String(value.label || value.name || value.trait || "").trim();
+      const confidenceValue =
+        value.confidence ??
+        confidences[value.category] ??
+        confidences[label] ??
+        Math.max(0.44, 0.88 - index * 0.07);
+      const confidence = Number(confidenceValue);
+      return {
+        label,
+        category: value.category || "trait",
+        confidence: Number.isFinite(confidence)
+          ? Math.max(0.2, Math.min(1, confidence > 1 ? confidence / 100 : confidence))
+          : 0.6,
+      };
+    })
+    .filter((trait) => {
+      const key = trait.label.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 7);
+}
+
+function buildPersonaSummary(style = {}, suppliedSummary = "") {
+  if (suppliedSummary) return suppliedSummary;
+  const persona = style.persona || {};
+  const preferences = style.preferences || {};
+  const descriptors = [persona.formality, persona.directness, persona.energy]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  if (!descriptors.length && !style?.stats?.learned_examples) {
+    return "Finalize a few rewrites and PhraseAI will turn your choices into a clear, useful writing persona.";
+  }
+
+  const opening = descriptors.length
+    ? `Your voice is ${descriptors.join(", ")}.`
+    : "Your writing voice is taking shape.";
+  const sentenceLength = Number(preferences.avg_sentence_length);
+  const rhythm = Number.isFinite(sentenceLength) && sentenceLength > 0
+    ? ` You tend to write ${sentenceLength < 14 ? "concise" : sentenceLength > 22 ? "more detailed" : "balanced"} sentences.`
+    : "";
+  const warmth = preferences.prefers_greeting === "used"
+    ? " You usually open with a greeting"
+    : " You favor efficient openings";
+  const signoff = preferences.prefers_signoff === "used"
+    ? " and close with a friendly sign-off."
+    : ".";
+  return `${opening}${rhythm}${warmth}${signoff}`;
+}
+
+function PersonaMap({ initials, traits }) {
+  const nodes = traits.map((trait, index) => {
+    const angle = -Math.PI / 2 + (index * Math.PI * 2) / Math.max(traits.length, 1);
+    return {
+      ...trait,
+      x: 210 + Math.cos(angle) * (index % 2 ? 128 : 112),
+      y: 155 + Math.sin(angle) * (index % 2 ? 104 : 92),
+    };
+  });
+
+  return (
+    <svg className="persona-map-svg" viewBox="0 0 420 310" role="img" aria-label="A map of your strongest writing traits">
+      <defs>
+        <radialGradient id="personaCore" cx="35%" cy="30%">
+          <stop offset="0%" stopColor="#a3f4cd" />
+          <stop offset="100%" stopColor="#55ca91" />
+        </radialGradient>
+        <filter id="personaGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="7" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <circle className="persona-orbit persona-orbit-one" cx="210" cy="155" r="92" />
+      <circle className="persona-orbit persona-orbit-two" cx="210" cy="155" r="130" />
+      {nodes.map((node, index) => (
+        <g key={`${node.label}-${index}`}>
+          <line
+            className="persona-edge"
+            x1="210"
+            y1="155"
+            x2={node.x}
+            y2={node.y}
+            style={{ opacity: 0.18 + node.confidence * 0.68, strokeWidth: 0.8 + node.confidence * 2.2 }}
+          />
+          <circle
+            className="persona-node-halo"
+            cx={node.x}
+            cy={node.y}
+            r={24 + node.confidence * 5}
+            style={{ opacity: 0.06 + node.confidence * 0.08 }}
+          />
+          <circle className="persona-node" cx={node.x} cy={node.y} r={4.5 + node.confidence * 2.5} />
+          <text
+            className="persona-node-label"
+            x={node.x}
+            y={node.y + (node.y < 155 ? -17 : 23)}
+            textAnchor="middle"
+          >
+            {titleCase(node.label)}
+          </text>
+          <text
+            className="persona-node-confidence"
+            x={node.x}
+            y={node.y + (node.y < 155 ? -5 : 35)}
+            textAnchor="middle"
+          >
+            {Math.round(node.confidence * 100)}%
+          </text>
+        </g>
+      ))}
+      <circle className="persona-core-glow" cx="210" cy="155" r="42" filter="url(#personaGlow)" />
+      <circle className="persona-core" cx="210" cy="155" r="34" fill="url(#personaCore)" />
+      <text className="persona-initials" x="210" y="161" textAnchor="middle">{initials}</text>
+    </svg>
+  );
+}
+
 function App() {
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
@@ -223,8 +431,12 @@ function App() {
   const [learnMessage, setLearnMessage] = useState("");
   const [stressMessage, setStressMessage] = useState("");
   const [stressLoading, setStressLoading] = useState(false);
-  const [profile, setProfile] = useState({});
-  const [learningEvents, setLearningEvents] = useState([]);
+  const [styleData, setStyleData] = useState(() => normalizeStyleData());
+  const [styleDataLoading, setStyleDataLoading] = useState(false);
+  const [styleDataError, setStyleDataError] = useState("");
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState("");
+  const [feedbackBusyId, setFeedbackBusyId] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
   const [copyStatus, setCopyStatus] = useState("Copy");
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -241,17 +453,6 @@ function App() {
   const loginAttemptsRef = useRef(new Map());
   const accountName = session?.user?.email || "Client";
   const accountInitials = getInitials(accountName);
-
-  useEffect(() => {
-    try {
-      const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-      if (savedTheme === "dark" || savedTheme === "light") {
-        setTheme(savedTheme);
-      }
-    } catch {
-      // Ignore storage failures.
-    }
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -274,14 +475,6 @@ function App() {
       active = false;
     };
   }, []);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    } catch {
-      // Ignore storage failures.
-    }
-  }, [theme]);
 
   useEffect(() => {
     let mounted = true;
@@ -341,12 +534,11 @@ function App() {
 
   useEffect(() => {
     if (!session?.access_token) {
-      setProfile({});
-      setLearningEvents([]);
+      setStyleData(normalizeStyleData());
+      setStyleDataError("");
       return;
     }
-    loadProfile();
-    loadLearningEvents();
+    loadStyleData();
   }, [session?.access_token]);
 
   const tokens = THEMES[theme];
@@ -482,22 +674,24 @@ function App() {
     return data;
   }
 
-  async function loadProfile() {
+  // FRONTEND: Style profile and history share one authenticated aggregate and one refresh path.
+  async function loadStyleData({ quiet = false } = {}) {
+    if (!quiet) setStyleDataLoading(true);
+    setStyleDataError("");
     try {
-      const data = await apiFetch("/profile/me");
-      setProfile(data.profile || {});
-    } catch {
-      // Keep UX resilient if profile storage is temporarily unavailable.
-      setProfile({});
-    }
-  }
-
-  async function loadLearningEvents() {
-    try {
-      const data = await apiFetch("/learning-events/me?limit=25");
-      setLearningEvents(data.events || []);
-    } catch {
-      setLearningEvents([]);
+      const data = normalizeStyleData(await apiFetch("/style-data/me"));
+      setStyleData(data);
+      setSelectedSnapshotId((current) => {
+        if (current && data.personaSnapshots.some((snapshot) => String(snapshot.id) === current)) {
+          return current;
+        }
+        const latest = data.personaSnapshots[data.personaSnapshots.length - 1];
+        return latest ? String(latest.id ?? data.personaSnapshots.length - 1) : "";
+      });
+    } catch (err) {
+      setStyleDataError(err.message || "Could not load your style profile.");
+    } finally {
+      if (!quiet) setStyleDataLoading(false);
     }
   }
 
@@ -576,7 +770,7 @@ function App() {
 
     setLearning(true);
     try {
-      const data = await apiFetch("/learn", {
+      await apiFetch("/learn", {
         method: "POST",
         body: JSON.stringify({
           mode,
@@ -586,8 +780,7 @@ function App() {
         }),
       });
 
-      setProfile(data.profile || {});
-      loadLearningEvents();
+      await loadStyleData({ quiet: true });
       setLearnMessage("Saved. Future rewrites will adapt to your style.");
     } catch (err) {
       setLearnMessage(err.message || "Could not save learning signal.");
@@ -606,9 +799,8 @@ function App() {
         body: JSON.stringify({ samples_per_phase: 15 }),
       });
 
-      setProfile(data.profile || {});
       setStressMessage(`Stress test completed with ${data.processed_samples || 0} samples.`);
-      loadLearningEvents();
+      await loadStyleData({ quiet: true });
     } catch (err) {
       setStressMessage(err.message || "Could not run stress test.");
     } finally {
@@ -621,6 +813,34 @@ function App() {
     await navigator.clipboard.writeText(rewritten);
     setCopyStatus("Copied");
     window.setTimeout(() => setCopyStatus("Copy"), 1200);
+  }
+
+  // FRONTEND: Feedback is persisted by the backend, then the aggregate is reloaded to show learned changes.
+  async function handleHistoryFeedback(entryId, rating) {
+    if (!entryId || feedbackBusyId) return;
+    setFeedbackBusyId(String(entryId));
+    setFeedbackMessage("");
+    try {
+      try {
+        await apiFetch(`/email-history/${encodeURIComponent(entryId)}/feedback`, {
+          method: "POST",
+          body: JSON.stringify({ rating }),
+        });
+      } catch (err) {
+        // FRONTEND: Temporary compatibility for deployments still exposing the aggregate feedback route.
+        if (err?.status !== 404) throw err;
+        await apiFetch("/style-feedback", {
+          method: "POST",
+          body: JSON.stringify({ rating, history_id: Number(entryId) }),
+        });
+      }
+      await loadStyleData({ quiet: true });
+      setFeedbackMessage(rating === "good" ? "Saved as a good match." : "Saved. PhraseAI will adjust.");
+    } catch (err) {
+      setFeedbackMessage(err.message || "Could not save feedback.");
+    } finally {
+      setFeedbackBusyId("");
+    }
   }
 
   async function handleAuthSubmit(event) {
@@ -1092,39 +1312,10 @@ function App() {
   }
 
   function renderHistory() {
-    const recent = learningEvents;
-
+    // FRONTEND: Keep the history route useful by rendering the same durable email records as Style Profile.
     return (
-      <div className="rounded-2xl border p-6" style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}>
-        <div className="space-y-3">
-          {recent.length === 0 ? (
-            <div
-              className="rounded-xl border p-4"
-              style={{ backgroundColor: tokens.fieldBg, borderColor: tokens.border }}
-            >
-              <p className="text-sm font-semibold" style={{ color: tokens.text }}>No learned rewrites yet</p>
-              <p className="mt-1 text-xs" style={{ color: tokens.muted }}>Finalize a rewrite to create your first history entry.</p>
-            </div>
-          ) : (
-            recent.map((entry, index) => (
-              <div
-                key={`${entry.learned_at || "entry"}-${index}`}
-                className="rounded-xl border p-4"
-                style={{ backgroundColor: tokens.fieldBg, borderColor: tokens.border }}
-              >
-                <p className="text-sm font-semibold" style={{ color: tokens.text }}>
-                  {entry.mode ? entry.mode.replaceAll("_", " ") : "rewrite"}
-                </p>
-                <p className="mt-1 text-xs" style={{ color: tokens.muted }}>
-                  {entry.created_at ? new Date(entry.created_at).toLocaleString() : "Recently"}
-                </p>
-                <p className="mt-2 text-xs" style={{ color: tokens.soft }}>
-                  Source: {entry.source || "manual"} • Final: {entry.final_excerpt || "(no preview)"}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
+      <div className="style-page style-page-history">
+        <EmailHistoryFeed expanded />
       </div>
     );
   }
@@ -1159,112 +1350,251 @@ function App() {
           })}
         </div>
         <p className="mt-6 text-xs" style={{ color: tokens.muted }}>
-          Theme changes are applied instantly and remembered when you reopen the app.
+          Theme changes are applied instantly for this session.
         </p>
       </div>
     );
   }
 
-  function renderStyleProfile() {
-    const stats = profile.stats || {};
-    const preferences = profile.preferences || {};
-    const persona = profile.persona || {};
-    const guidance = profile.guidance || [];
+  function EmailHistoryFeed({ expanded = false }) {
+    const entries = styleData.emailHistory;
+
+    if (styleDataLoading) {
+      return (
+        <section className="style-card history-card" aria-busy="true">
+          <div className="style-card-heading">
+            <div><span className="eyebrow">EMAIL MEMORY</span><h2>Recent writing</h2></div>
+          </div>
+          <div className="history-skeleton" aria-label="Loading email history">
+            {[0, 1, 2].map((item) => <span key={item} />)}
+          </div>
+        </section>
+      );
+    }
 
     return (
-      <div className="rounded-2xl border p-6" style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}>
-        <div className="rounded-xl border p-5" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-          <p className="text-xs" style={{ color: tokens.muted }}>LEARNED EXAMPLES</p>
-          <p className="mt-1 text-2xl font-semibold" style={{ color: tokens.text }}>{stats.learned_examples || 0}</p>
-          <p className="mt-2 text-xs" style={{ color: tokens.soft }}>
-            Last updated: {stats.last_learned_at ? new Date(stats.last_learned_at).toLocaleString() : "No data yet"}
-          </p>
+      <section className={`style-card history-card ${expanded ? "history-card-expanded" : ""}`}>
+        <div className="style-card-heading">
+          <div>
+            <span className="eyebrow">EMAIL MEMORY</span>
+            <h2>{expanded ? "Your rewrite history" : "Recent writing"}</h2>
+            <p>Rate finished rewrites so your profile keeps learning what sounds right.</p>
+          </div>
+          {!expanded ? (
+            <button type="button" className="text-action" onClick={() => setActiveSection("history")}>
+              View all
+            </button>
+          ) : null}
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <div className="rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-            <p className="text-xs" style={{ color: tokens.muted }}>Average sentence length</p>
-            <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>
-              {preferences.avg_sentence_length || 0} words
-            </p>
+        {styleDataError ? (
+          <div className="style-state style-state-error">
+            <strong>History is temporarily unavailable.</strong>
+            <p>{styleDataError}</p>
+            <button type="button" className="secondary-button" onClick={() => loadStyleData()}>Try again</button>
           </div>
-          <div className="rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-            <p className="text-xs" style={{ color: tokens.muted }}>Contraction ratio</p>
-            <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>
-              {preferences.contraction_ratio || 0}
-            </p>
+        ) : entries.length === 0 ? (
+          <div className="style-state">
+            <span className="style-state-mark"><HistoryIcon /></span>
+            <strong>No finalized emails yet</strong>
+            <p>Use a rewritten version and it will appear here with the traits it helped shape.</p>
+            <button type="button" className="secondary-button" onClick={() => setActiveSection("home")}>Write your first email</button>
           </div>
-        </div>
+        ) : (
+          <div className="email-history-scroll">
+            {entries.map((entry, index) => {
+              const id = entry.id ?? index;
+              const original = entry.original_text || entry.original || entry.draft || "";
+              const rewrite = entry.final_version || entry.generated_rewrite || entry.rewrite || entry.final || "";
+              const traits = entry.influenced_traits || entry.traits || [];
+              const feedback = typeof entry.feedback === "string"
+                ? entry.feedback
+                : entry.feedback?.rating || entry.feedback?.style_rating || "";
+              const busy = feedbackBusyId === String(id);
 
-        <div className="mt-4 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-          <p className="text-xs" style={{ color: tokens.muted }}>Learned persona</p>
-          <div className="mt-2 grid gap-2 md:grid-cols-3">
-            <div className="rounded-lg border p-3" style={{ borderColor: tokens.border }}>
-              <p className="text-xs" style={{ color: tokens.muted }}>Formality</p>
-              <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{persona.formality || "unknown"}</p>
-            </div>
-            <div className="rounded-lg border p-3" style={{ borderColor: tokens.border }}>
-              <p className="text-xs" style={{ color: tokens.muted }}>Directness</p>
-              <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{persona.directness || "unknown"}</p>
-            </div>
-            <div className="rounded-lg border p-3" style={{ borderColor: tokens.border }}>
-              <p className="text-xs" style={{ color: tokens.muted }}>Energy</p>
-              <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{persona.energy || "unknown"}</p>
-            </div>
+              return (
+                <article className="email-history-item" key={id}>
+                  <div className="email-history-meta">
+                    <span>{formatDate(entry.finalized_at || entry.submitted_at || entry.created_at)}</span>
+                    {traits.length ? <span>{traits.length} traits influenced</span> : <span>Profile signal</span>}
+                  </div>
+                  <div className="email-compare">
+                    <div>
+                      <span className="email-compare-label">Original</span>
+                      <p>{original || "Original text unavailable."}</p>
+                    </div>
+                    <div className="email-rewrite">
+                      <span className="email-compare-label">Your version</span>
+                      <p>{rewrite || "Final rewrite unavailable."}</p>
+                    </div>
+                  </div>
+                  {traits.length ? (
+                    <div className="trait-chip-row" aria-label="Influenced traits">
+                      {traits.map((trait, traitIndex) => (
+                        <span className="trait-chip" key={`${trait}-${traitIndex}`}>{titleCase(trait)}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="history-feedback">
+                    <span>Did this sound like you?</span>
+                    <div role="group" aria-label={`Rate rewrite from ${formatDate(entry.finalized_at || entry.submitted_at)}`}>
+                      <button
+                        type="button"
+                        className={feedback === "good" ? "feedback-button active" : "feedback-button"}
+                        disabled={busy}
+                        aria-pressed={feedback === "good"}
+                        onClick={() => handleHistoryFeedback(id, "good")}
+                      >
+                        <CheckIcon /> Good
+                      </button>
+                      <button
+                        type="button"
+                        className={feedback === "off" ? "feedback-button off active" : "feedback-button off"}
+                        disabled={busy}
+                        aria-pressed={feedback === "off"}
+                        onClick={() => handleHistoryFeedback(id, "off")}
+                      >
+                        <span aria-hidden="true">×</span> Off
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(persona.traits || []).map((trait, index) => (
-              <span
-                key={`${trait}-${index}`}
-                className="rounded-full border px-2 py-1 text-xs"
-                style={{ borderColor: tokens.border, color: tokens.soft, backgroundColor: tokens.surface }}
-              >
-                {trait}
-              </span>
-            ))}
-          </div>
-        </div>
+        )}
+        {feedbackMessage ? <p className="history-feedback-message" aria-live="polite">{feedbackMessage}</p> : null}
+      </section>
+    );
+  }
 
-        <div className="mt-4 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-          <p className="text-xs" style={{ color: tokens.muted }}>Generated guidance for future rewrites</p>
-          {guidance.length === 0 ? (
-            <p className="mt-2 text-sm" style={{ color: tokens.soft }}>
-              Finalize a rewrite to generate personalized guidance.
-            </p>
-          ) : (
-            <ul className="mt-2 space-y-1 text-sm" style={{ color: tokens.text }}>
-              {guidance.map((line, index) => (
-                <li key={`${line}-${index}`}>• {line}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+  function renderStyleProfile() {
+    const snapshots = styleData.personaSnapshots;
+    const selectedIndex = snapshots.findIndex((snapshot, index) =>
+      String(snapshot.id ?? index) === selectedSnapshotId);
+    const selectedSnapshot = snapshots[selectedIndex >= 0 ? selectedIndex : snapshots.length - 1];
+    const displayStyle = selectedSnapshot?.style || selectedSnapshot?.current_style || styleData.currentStyle;
+    const traits = getPersonaTraits(displayStyle, styleData.styleTags);
+    const learnedExamples = Number(styleData.currentStyle?.stats?.learned_examples || styleData.emailHistory.length || 0);
+    const strengthPercent = Math.round(styleData.styleStrength * 100);
+    const summary = buildPersonaSummary(displayStyle, selectedSnapshot ? "" : styleData.personaSummary);
+    const hasPersona = traits.length > 0 || learnedExamples > 0 || snapshots.length > 0;
+
+    // FRONTEND: The profile combines map, confidence, evolution, summary, and feedback history in one responsive workspace.
+    return (
+      <div className="style-page">
+        {styleDataLoading ? (
+          <div className="style-profile-loading" aria-label="Loading style profile">
+            <span /><span /><span />
+          </div>
+        ) : styleDataError && !hasPersona && styleData.emailHistory.length === 0 ? (
+          <div className="style-state style-state-error style-state-page">
+            <strong>We could not load your Style Profile.</strong>
+            <p>{styleDataError}</p>
+            <button type="button" className="primary-button" onClick={() => loadStyleData()}>Try again</button>
+          </div>
+        ) : !hasPersona ? (
+          <div className="style-state style-state-page">
+            <span className="style-state-mark"><SparkleIcon /></span>
+            <strong>Your voice starts with one finished rewrite</strong>
+            <p>PhraseAI builds this profile only from emails you finalize while signed in.</p>
+            <button type="button" className="primary-button" onClick={() => setActiveSection("home")}>Create a rewrite</button>
+          </div>
+        ) : (
+          <>
+            <section className="style-hero-grid">
+              <div className="style-card persona-map-card">
+                <div className="style-card-heading">
+                  <div>
+                    <span className="eyebrow">PERSONA MAP</span>
+                    <h2>Your voice, mapped</h2>
+                    <p>Stronger lines mean PhraseAI has more confidence in that trait.</p>
+                  </div>
+                  <span className="live-profile-badge"><span /> Live profile</span>
+                </div>
+                <div className="persona-map-wrap">
+                  <PersonaMap initials={accountInitials} traits={traits} />
+                </div>
+              </div>
+
+              <div className="style-side-stack">
+                <section className="style-card persona-summary-card">
+                  <span className="eyebrow">IN PLAIN ENGLISH</span>
+                  <h2>This is how you sound</h2>
+                  <p>{summary}</p>
+                  <div className="trait-chip-row">
+                    {traits.slice(0, 5).map((trait) => (
+                      <span className="trait-chip" key={trait.label}>{titleCase(trait.label)}</span>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="style-card strength-card">
+                  <div className="strength-heading">
+                    <div>
+                      <span className="eyebrow">STYLE STRENGTH</span>
+                      <h2>{strengthPercent}% understood</h2>
+                    </div>
+                    <strong>{learnedExamples}</strong>
+                  </div>
+                  <div className="strength-track" role="progressbar" aria-label="Style strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow={strengthPercent}>
+                    <span style={{ width: `${strengthPercent}%` }} />
+                  </div>
+                  <p>Your style profile is {strengthPercent}% complete — submit more emails to sharpen your rewrites.</p>
+                </section>
+              </div>
+            </section>
+
+            <section className="style-card evolution-card">
+              <div className="style-card-heading">
+                <div>
+                  <span className="eyebrow">EVOLUTION</span>
+                  <h2>Your profile is growing</h2>
+                  <p>Select a moment to see the persona PhraseAI understood then.</p>
+                </div>
+                <span className="timeline-count">{snapshots.length} snapshots</span>
+              </div>
+              {snapshots.length ? (
+                <div className="timeline-scroll">
+                  <div className="timeline-track" role="list" aria-label="Persona evolution timeline">
+                    {snapshots.map((snapshot, index) => {
+                      const id = String(snapshot.id ?? index);
+                      const active = id === selectedSnapshotId || (!selectedSnapshotId && index === snapshots.length - 1);
+                      const completeness = Math.round(Number(snapshot.completeness || 0) * 100);
+                      return (
+                        <button
+                          type="button"
+                          role="listitem"
+                          className={active ? "timeline-stop active" : "timeline-stop"}
+                          key={id}
+                          onClick={() => setSelectedSnapshotId(id)}
+                          aria-pressed={active}
+                        >
+                          <span className="timeline-dot" />
+                          <strong>{index === snapshots.length - 1 ? "Now" : formatDate(snapshot.captured_at || snapshot.created_at, { short: true })}</strong>
+                          <small>{completeness ? `${completeness}% complete` : `Version ${index + 1}`}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="timeline-empty">Your first saved persona snapshot will appear here after more learning.</div>
+              )}
+            </section>
+
+            <EmailHistoryFeed />
+          </>
+        )}
 
         {IS_DEV ? (
-          <div className="mt-4 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-            <p className="text-xs" style={{ color: tokens.muted }}>Developer stress testing</p>
-            <button
-              type="button"
-              onClick={runStressTest}
-              disabled={stressLoading}
-              className="mt-2 rounded-lg border px-3 py-2 text-xs font-semibold"
-              style={{
-                borderColor: tokens.border,
-                color: tokens.text,
-                backgroundColor: tokens.surface,
-                cursor: stressLoading ? "not-allowed" : "pointer",
-                opacity: stressLoading ? 0.7 : 1,
-              }}
-            >
-              {stressLoading ? "Running stress test..." : "Run Stress Test Learning (30 samples)"}
+          <section className="style-card dev-style-card">
+            <span className="eyebrow">DEVELOPER</span>
+            <button type="button" onClick={runStressTest} disabled={stressLoading} className="secondary-button">
+              {stressLoading ? "Running stress test..." : "Run stress-test learning"}
             </button>
-            <p className="mt-2 text-xs" style={{ color: tokens.soft }}>
-              Sends synthetic learning events to the backend and updates persona/profile.
-            </p>
-            {stressMessage ? (
-              <p className="mt-2 text-xs" style={{ color: tokens.muted }}>{stressMessage}</p>
-            ) : null}
-          </div>
+            {stressMessage ? <p>{stressMessage}</p> : null}
+          </section>
         ) : null}
       </div>
     );
@@ -1317,9 +1647,9 @@ function App() {
 
   const sectionMeta = {
     home: { title: "Rewrite Emails In Your Voice", sub: "Pick a mode, generate a stronger draft, and refine it inline." },
-    history: { title: "Recent Rewrites", sub: "Your saved drafts and rewrites." },
+    history: { title: "Rewrite History", sub: "Compare originals, final versions, and the traits each email shaped." },
     settings: { title: "App Preferences", sub: "Choose the visual mode for the whole app." },
-    "style-profile": { title: "Style Profile", sub: "Define your personal writing voice." },
+    "style-profile": { title: "Style Profile", sub: "See what PhraseAI has learned from the writing choices you approve." },
     account: { title: "Account", sub: "Manage your personal information and session." },
   };
   const currentMeta = sectionMeta[activeSection] || sectionMeta.home;
