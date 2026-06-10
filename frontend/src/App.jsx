@@ -20,9 +20,9 @@ function normalizeEmail(value) {
 }
 
 const MODES = [
-  { key: "more_professional", label: "More Professional" },
-  { key: "sound_smarter", label: "Sound Smarter" },
-  { key: "fix_grammar", label: "Fix My Grammar" },
+  { key: "more_professional", label: "Professional", description: "Polished and confident" },
+  { key: "sound_smarter", label: "Sharper", description: "Clearer and more precise" },
+  { key: "fix_grammar", label: "Grammar", description: "Correct, same voice" },
 ];
 
 const THEMES = {
@@ -53,8 +53,7 @@ const THEMES = {
     badgeBorder: "rgba(255,255,255,0.1)",
   },
   light: {
-    pageBackground:
-      "radial-gradient(circle at top, rgba(255,255,255,0.95), transparent 28%), linear-gradient(180deg, #f8f6f1 0%, #f0ebe3 48%, #e6dfd6 100%)",
+    pageBackground: "#f3f2ee",
     text: "#161616",
     muted: "#52525b",
     soft: "#6b7280",
@@ -109,20 +108,59 @@ function ProfileIcon() {
   );
 }
 
-function AccountIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0" style={{ vectorEffect: "non-scaling-stroke" }} aria-hidden="true">
-      <circle cx="12" cy="8" r="3.2" />
-      <path d="M5.2 20c1.5-3.1 4.2-4.7 6.8-4.7 2.6 0 5.3 1.6 6.8 4.7" />
-    </svg>
-  );
-}
-
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0" style={{ vectorEffect: "non-scaling-stroke" }} aria-hidden="true">
       <path d="M12 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Z" />
       <path d="m19 12 .9 1.6-1.8 3.1-1.8-.2a7.8 7.8 0 0 1-1.4.8l-.7 1.7h-3.6l-.7-1.7a7.8 7.8 0 0 1-1.4-.8l-1.8.2L4.1 13.6 5 12l-.9-1.6 1.8-3.1 1.8.2c.4-.3.9-.5 1.4-.8l.7-1.7h3.6l.7 1.7c.5.2 1 .5 1.4.8l1.8-.2 1.8 3.1L19 12Z" />
+    </svg>
+  );
+}
+
+function SparkleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m12 3 1.2 4.2L17 9l-3.8 1.8L12 15l-1.2-4.2L7 9l3.8-1.8L12 3Z" />
+      <path d="m18.5 15 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3Z" />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12h14" />
+      <path d="m14 7 5 5-5 5" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="8" y="8" width="11" height="11" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m5 12 4 4L19 6" />
+    </svg>
+  );
+}
+
+function ThemeIcon({ theme }) {
+  return theme === "dark" ? (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z" />
     </svg>
   );
 }
@@ -200,6 +238,7 @@ function localRewriteFallback(draftValue, selectedMode, contextValue) {
 function App() {
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
+  const [showContext, setShowContext] = useState(false);
   const [mode, setMode] = useState("more_professional");
   const [rewritten, setRewritten] = useState("");
   const [lastAiOutput, setLastAiOutput] = useState("");
@@ -214,7 +253,6 @@ function App() {
   const [stressLoading, setStressLoading] = useState(false);
   const [profile, setProfile] = useState({});
   const [learningEvents, setLearningEvents] = useState([]);
-  const [hoveredNav, setHoveredNav] = useState(null);
   const [copyStatus, setCopyStatus] = useState("Copy");
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -342,9 +380,6 @@ function App() {
     { key: "history", label: "History", description: "Recent rewritten drafts", icon: HistoryIcon },
     { key: "style-profile", label: "Style Profile", description: "Learned writing persona", icon: ProfileIcon },
   ];
-
-  const activeSectionTitle =
-    navItems.find((item) => item.key === activeSection)?.label || (activeSection === "settings" ? "Settings" : "Home");
 
   const isHome = activeSection === "home";
   const isHistory = activeSection === "history";
@@ -650,541 +685,347 @@ function App() {
   }
 
   if (!session?.access_token || isPasswordRecovery) {
-    const highlightItems = [
-      "Smart rewrite modes",
-      "Learning style profile",
-      "Private account-scoped data",
-    ];
-
-    const contactItems = [
-      { label: "Support", value: "support@phraseai.app", href: "mailto:support@phraseai.app" },
-      { label: "Partnerships", value: "partners@phraseai.app", href: "mailto:partners@phraseai.app" },
-      { label: "Response", value: "Under 24h (Mon-Fri)", href: null },
-      { label: "Hours", value: "09:00 - 18:00 UTC", href: null },
-    ];
-
-    const visualSections = [
-      {
-        title: "Refine Your Message",
-        text: "Choose a rewrite mode and instantly improve clarity while keeping your intent.",
-        image: "/visuals/story-atelier.svg",
-      },
-      {
-        title: "Teach Your Style",
-        text: "Every final edit helps PhraseAI learn how you naturally communicate.",
-        image: "/visuals/story-motion.svg",
-      },
-      {
-        title: "Stay Connected",
-        text: "Get support and onboarding guidance whenever your team needs it.",
-        image: "/visuals/story-contact.svg",
-      },
-    ];
-
-    const cardBg = theme === "dark" ? "rgba(0,0,0,0.62)" : "rgba(255,255,255,0.84)";
-    const cardBorder = tokens.border;
-
     return (
       <div
+        className="auth-page"
+        data-theme={theme}
         style={{
-          minHeight: "100vh",
-          background: tokens.pageBackground,
-          color: tokens.text,
-          padding: "28px 16px 48px",
-          fontFamily: "Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif",
+          "--page-bg": tokens.pageBackground,
+          "--card": tokens.surface,
+          "--panel": tokens.surfaceStrong,
+          "--text": tokens.text,
+          "--muted": tokens.muted,
+          "--soft": tokens.soft,
+          "--border": tokens.border,
+          "--surface": tokens.surface,
+          "--surface-strong": tokens.surfaceStrong,
+          "--field-bg": tokens.fieldBg,
+          "--field-text": tokens.fieldText,
+          "--primary-bg": tokens.primaryBg,
+          "--primary-text": tokens.primaryText,
+          "--secondary-bg": tokens.secondaryBg,
+          "--secondary-text": tokens.secondaryText,
+          "--placeholder-color": tokens.fieldPlaceholder,
         }}
       >
-        <div style={{ width: "100%", maxWidth: 980, margin: "0 auto", display: "grid", gap: 14 }}>
-          <section
-            style={{
-              border: `1px solid ${cardBorder}`,
-              borderRadius: 20,
-              background: cardBg,
-              overflow: "hidden",
-            }}
+        <header className="auth-topbar">
+          <div className="auth-brand">
+            <BrandLogoIcon light={theme === "light"} />
+            <span>PhraseAI</span>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           >
-            <div style={{ padding: "30px 24px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
-              <div>
-                <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.14em", color: tokens.muted }}>PHRASEAI</p>
-                <h1 style={{ margin: "10px 0 0", fontSize: "clamp(1.8rem, 4vw, 2.6rem)", letterSpacing: "-0.03em", lineHeight: 1.05 }}>
-                  Clear writing in your own voice.
-                </h1>
-                <p style={{ margin: "12px 0 0", fontSize: 14, lineHeight: 1.6, color: tokens.soft, maxWidth: 560 }}>
-                  Rewrite emails, keep your tone, and let the assistant learn from your final edits.
+            <ThemeIcon theme={theme} />
+          </button>
+        </header>
+
+        {/* AGENT2: [CHANGE] The auth screen prioritizes the form while keeping the product promise visible. */}
+        <main className="auth-layout">
+          <section className="auth-story">
+            <div className="auth-copy">
+              <span className="eyebrow">YOUR VOICE, REFINED</span>
+              <h1>Write the email you meant to send.</h1>
+              <p>
+                Turn rough thoughts into clear, confident messages. PhraseAI learns from every final edit so the result sounds more like you over time.
+              </p>
+              <div className="auth-benefits" aria-label="Product benefits">
+                <span><CheckIcon /> Intent preserved</span>
+                <span><CheckIcon /> Style learned privately</span>
+                <span><CheckIcon /> Ready in seconds</span>
+              </div>
+            </div>
+
+            <div className="auth-preview" aria-hidden="true">
+              <div className="preview-toolbar">
+                <span className="preview-dot" />
+                <span>Reply draft</span>
+                <span className="preview-status"><SparkleIcon /> Refined</span>
+              </div>
+              <div className="preview-content">
+                <div className="preview-line short" />
+                <div className="preview-line" />
+                <div className="preview-line medium" />
+                <div className="preview-line" />
+                <div className="preview-line short" />
+              </div>
+              <div className="preview-footer">
+                <span>{aiInfo?.provider ? `${aiInfo.provider} connected` : "AI workspace"}</span>
+                <span>Private by account</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="auth-form-wrap">
+            <form className="auth-form" onSubmit={handleAuthSubmit}>
+              <div className="auth-form-heading">
+                <span className="eyebrow">{isPasswordRecovery ? "ACCOUNT RECOVERY" : authMode === "signin" ? "WELCOME BACK" : "GET STARTED"}</span>
+                <h2>{isPasswordRecovery ? "Set a new password" : authMode === "signin" ? "Sign in to PhraseAI" : "Create your workspace"}</h2>
+                <p>
+                  {isPasswordRecovery
+                    ? "Choose a secure password to finish recovering your account."
+                    : authMode === "signin"
+                      ? "Continue building a writing style that sounds like you."
+                      : "Start with a private workspace for your rewrites and style profile."}
                 </p>
-
-                {aiInfo?.model ? (
-                  <p style={{ margin: "10px 0 0", fontSize: 12, color: tokens.muted }}>
-                    AI model: {aiInfo.provider || "unknown"} / {aiInfo.model}
-                  </p>
-                ) : null}
-
-                <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {highlightItems.map((item) => (
-                    <span
-                      key={item}
-                      style={{
-                        border: `1px solid ${tokens.border}`,
-                        borderRadius: 999,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        color: tokens.muted,
-                        background: tokens.surface,
-                      }}
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
               </div>
 
-              <form
-                onSubmit={handleAuthSubmit}
-                style={{
-                  border: `1px solid ${tokens.border}`,
-                  borderRadius: 14,
-                  background: tokens.surface,
-                  padding: 18,
-                }}
-              >
-                <h2 style={{ margin: 0, fontSize: 22, letterSpacing: "-0.02em", color: tokens.text }}>
-                  {isPasswordRecovery ? "Set New Password" : "Access Workspace"}
-                </h2>
-                <p style={{ marginTop: 6, fontSize: 12, color: tokens.muted }}>
-                  {isPasswordRecovery ? "Choose a secure password to finish recovery." : authMode === "signin" ? "Sign in to continue." : "Create your account."}
-                </p>
+              {!isPasswordRecovery ? (
+                <div className="field-group">
+                  <label htmlFor="auth-email">Email</label>
+                  <input
+                    id="auth-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                    autoComplete="email"
+                    placeholder="you@company.com"
+                  />
+                </div>
+              ) : null}
 
-                {!isPasswordRecovery ? (
-                  <>
-                    <label style={{ display: "block", marginTop: 12, fontSize: 11, letterSpacing: "0.08em", color: tokens.muted }}>EMAIL</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      required
-                      autoComplete="email"
-                      style={{
-                        width: "100%",
-                        marginTop: 6,
-                        padding: "10px 11px",
-                        borderRadius: 10,
-                        border: `1px solid ${tokens.border}`,
-                        background: tokens.fieldBg,
-                        color: tokens.fieldText,
-                      }}
-                    />
-                  </>
-                ) : null}
-
-                <label style={{ display: "block", marginTop: 10, fontSize: 11, letterSpacing: "0.08em", color: tokens.muted }}>
-                  {isPasswordRecovery ? "NEW PASSWORD" : "PASSWORD"}
-                </label>
+              <div className="field-group">
+                <div className="field-label-row">
+                  <label htmlFor="auth-password">{isPasswordRecovery ? "New password" : "Password"}</label>
+                  {authMode === "signin" && !isPasswordRecovery ? (
+                    <button type="button" className="text-button" onClick={handleForgotPassword} disabled={resetBusy}>
+                      {resetBusy ? "Sending..." : "Forgot password?"}
+                    </button>
+                  ) : null}
+                </div>
                 <input
+                  id="auth-password"
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   required
                   minLength={8}
                   autoComplete={authMode === "signin" ? "current-password" : "new-password"}
-                  style={{
-                    width: "100%",
-                    marginTop: 6,
-                    padding: "10px 11px",
-                    borderRadius: 10,
-                    border: `1px solid ${tokens.border}`,
-                    background: tokens.fieldBg,
-                    color: tokens.fieldText,
-                  }}
+                  placeholder="At least 8 characters"
                 />
+              </div>
 
-                {authMode === "signin" && !isPasswordRecovery ? (
+              <button type="submit" className="primary-button auth-submit" disabled={authBusy}>
+                <span>{authBusy ? "Working..." : isPasswordRecovery ? "Update password" : authMode === "signin" ? "Sign in" : "Create account"}</span>
+                {!authBusy ? <ArrowIcon /> : <span className="button-spinner" />}
+              </button>
+
+              {!isPasswordRecovery ? (
+                <p className="auth-switch">
+                  {authMode === "signin" ? "New to PhraseAI?" : "Already have an account?"}
                   <button
                     type="button"
-                    onClick={handleForgotPassword}
-                    disabled={resetBusy}
-                    style={{
-                      marginTop: 8,
-                      border: "none",
-                      background: "transparent",
-                      color: tokens.muted,
-                      fontSize: 12,
-                      padding: 0,
-                      cursor: resetBusy ? "not-allowed" : "pointer",
-                      textAlign: "left",
+                    onClick={() => {
+                      setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
+                      setAuthError("");
+                      setAuthMessage("");
                     }}
                   >
-                    {resetBusy ? "Sending reset email..." : "Forgot your password?"}
+                    {authMode === "signin" ? "Create an account" : "Sign in"}
                   </button>
-                ) : null}
+                </p>
+              ) : null}
 
-                <button
-                  type="submit"
-                  disabled={authBusy}
-                  style={{
-                    marginTop: 12,
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "none",
-                    background: tokens.primaryBg,
-                    color: tokens.primaryText,
-                    fontWeight: 700,
-                    cursor: authBusy ? "not-allowed" : "pointer",
-                    opacity: authBusy ? 0.7 : 1,
-                  }}
-                >
-                  {authBusy ? "Working..." : isPasswordRecovery ? "Update Password" : authMode === "signin" ? "Sign In" : "Create Account"}
-                </button>
-
-                {!isPasswordRecovery ? <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
-                    setAuthError("");
-                    setAuthMessage("");
-                  }}
-                  style={{
-                    marginTop: 8,
-                    width: "100%",
-                    padding: "9px 12px",
-                    borderRadius: 10,
-                    border: `1px solid ${tokens.border}`,
-                    background: tokens.secondaryBg,
-                    color: tokens.secondaryText,
-                    cursor: "pointer",
-                  }}
-                >
-                  {authMode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-                </button> : null}
-
-                {authError ? <p style={{ marginTop: 10, fontSize: 12, color: "#f87171" }}>{authError}</p> : null}
-                {authMessage ? <p style={{ marginTop: 10, fontSize: 12, color: tokens.muted }}>{authMessage}</p> : null}
-              </form>
-            </div>
-          </section>
-
-          <section
-            style={{
-              border: `1px solid ${cardBorder}`,
-              borderRadius: 16,
-              background: cardBg,
-              padding: "14px 16px",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 10,
-            }}
-          >
-            {contactItems.map((item) => (
-              <div key={item.label}>
-                <p style={{ margin: 0, fontSize: 10, letterSpacing: "0.08em", color: tokens.muted }}>{item.label}</p>
-                {item.href ? (
-                  <a href={item.href} style={{ marginTop: 6, display: "inline-block", fontSize: 13, color: tokens.text, textDecoration: "none" }}>
-                    {item.value}
-                  </a>
-                ) : (
-                  <p style={{ margin: "6px 0 0", fontSize: 13, color: tokens.text }}>{item.value}</p>
-                )}
+              <div className="auth-message-slot" aria-live="polite">
+                {authError ? <p className="status-message error">{authError}</p> : null}
+                {authMessage ? <p className="status-message success">{authMessage}</p> : null}
               </div>
-            ))}
-          </section>
-
-          <section
-            style={{
-              border: `1px solid ${cardBorder}`,
-              borderRadius: 16,
-              background: cardBg,
-              padding: "18px",
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 10, letterSpacing: "0.1em", color: tokens.muted }}>SCROLL TO EXPLORE</p>
-            <h3 style={{ margin: "8px 0 0", fontSize: 22, letterSpacing: "-0.02em", color: tokens.text }}>
-              A cleaner visual overview of PhraseAI
-            </h3>
-            <p style={{ margin: "8px 0 0", fontSize: 13, color: tokens.soft, maxWidth: 720, lineHeight: 1.6 }}>
-              Scroll through these quick visuals to see how drafting, learning, and support work together.
+            </form>
+            <p className="auth-footnote">
+              By continuing, you agree to keep account access private. Need help?{" "}
+              <a href="mailto:support@phraseai.app">Contact support</a>.
             </p>
-
-            <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
-              {visualSections.map((item) => (
-                <article
-                  key={item.title}
-                  style={{
-                    border: `1px solid ${tokens.border}`,
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    background: tokens.surface,
-                  }}
-                >
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-                    <div style={{ padding: "14px 14px 12px" }}>
-                      <h4 style={{ margin: 0, fontSize: 17, color: tokens.text }}>{item.title}</h4>
-                      <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.6, color: tokens.muted }}>{item.text}</p>
-                    </div>
-                    <div style={{ minHeight: 180, borderLeft: `1px solid ${tokens.border}` }}>
-                      <img
-                        src={item.image}
-                        alt={`${item.title} illustration`}
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                      />
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
           </section>
-        </div>
+        </main>
       </div>
     );
   }
 
   function renderHome() {
-    // AGENT2: [CHANGE] Composer actions expose clear ready/loading states and stack responsively on narrow screens.
-    const cardBackground = tokens.surfaceStrong;
-    const cardBorder = tokens.border;
-    const bodyText = tokens.text;
-    const subduedText = tokens.muted;
-    const textareaBackground = tokens.fieldBg;
-    const textareaBorder = tokens.border;
-    const textareaColor = tokens.fieldText;
-    const modeActiveBackground = tokens.primaryBg;
-    const modeActiveColor = tokens.primaryText;
-    const modeInactiveBackground = tokens.inactiveNavBg;
-    const modeInactiveColor = tokens.inactiveNavText;
-    const actionBackground = tokens.primaryBg;
-    const actionColor = tokens.primaryText;
-    const secondaryActionBackground = tokens.secondaryBg;
-    const secondaryActionColor = tokens.secondaryText;
-
     return (
-      <div
-        className="composer-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 20,
-          width: "100%",
-          height: "100%",
-          alignItems: "stretch",
-        }}
-      >
-        <div
-          style={{
-            background: cardBackground,
-            border: `1px solid ${cardBorder}`,
-            borderRadius: 18,
-            padding: 24,
-            display: "flex",
-            flexDirection: "column",
-            minHeight: 0,
-            height: "100%",
-          }}
-        >
-          <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "2px", color: subduedText, marginBottom: 4 }}>INPUT</p>
-          <p style={{ fontSize: 12, lineHeight: 1.45, color: subduedText, marginBottom: 16 }}>Draft your email and choose how to transform it.</p>
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            maxLength={MAX_DRAFT_CHARS}
-            placeholder="Paste or write your email draft here..."
-            className="themed-textarea"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              background: textareaBackground,
-              border: `1px solid ${textareaBorder}`,
-              borderRadius: 12,
-              padding: 16,
-              fontSize: 14,
-              color: textareaColor,
-              resize: "none",
-              width: "100%",
-              boxSizing: "border-box",
-            }}
-          />
-
-          <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {MODES.map((m) => (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => setMode(m.key)}
-                style={
-                  mode === m.key
-                    ? {
-                        padding: "6px 16px",
-                        borderRadius: 999,
-                        fontSize: 12,
-                        fontWeight: 500,
-                        border: "1px solid transparent",
-                        cursor: "pointer",
-                        background: modeActiveBackground,
-                        color: modeActiveColor,
-                        transition: "all 150ms ease",
-                      }
-                    : {
-                        padding: "6px 16px",
-                        borderRadius: 999,
-                        fontSize: 12,
-                        fontWeight: 500,
-                        border: `1px solid ${cardBorder}`,
-                        cursor: "pointer",
-                        background: modeInactiveBackground,
-                        color: modeInactiveColor,
-                        transition: "all 150ms ease",
-                      }
+      <div className="composer-workspace">
+        <section className="composer-panel input-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">ORIGINAL</span>
+              <h2>What do you want to say?</h2>
+            </div>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                if (draft) {
+                  setDraft("");
+                  setRewritten("");
+                  setLastAiOutput("");
+                } else {
+                  setDraft("Hi Sarah, just checking if you had a chance to review the proposal. We need your feedback before Friday so we can keep the launch on track. Thanks!");
+                  setMode("more_professional");
                 }
-              >
-                {m.label}
-              </button>
-            ))}
+              }}
+            >
+              {draft ? "Clear" : "Use example"}
+            </button>
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "2px", color: subduedText, marginBottom: 6 }}>
-              CONTEXT (OPTIONAL)
-            </p>
-            <p style={{ fontSize: 12, lineHeight: 1.4, color: subduedText, marginBottom: 10 }}>
-              Paste the email you are replying to, or add extra instructions.
-            </p>
+          <div className="editor-shell">
             <textarea
-              value={contextText}
-              onChange={(e) => setContextText(e.target.value)}
-              maxLength={MAX_CONTEXT_CHARS}
-              placeholder="Original email or extra context..."
-              className="themed-textarea"
-              style={{
-                minHeight: 96,
-                background: textareaBackground,
-                border: `1px solid ${textareaBorder}`,
-                borderRadius: 12,
-                padding: 12,
-                fontSize: 13,
-                color: textareaColor,
-                resize: "vertical",
-                width: "100%",
-                boxSizing: "border-box",
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                  event.preventDefault();
+                  if (rewriteReady && !loading) handleRewrite();
+                }
               }}
+              maxLength={MAX_DRAFT_CHARS}
+              placeholder="Write naturally. A rough draft is perfect..."
+              className="composer-textarea themed-textarea"
+              aria-label="Email draft"
             />
+            <div className="editor-meta">
+              <span>{draft.trim() ? `${draft.trim().split(/\s+/).length} words` : "Start typing"}</span>
+              <span>{draft.length.toLocaleString()} / {MAX_DRAFT_CHARS.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="mode-section">
+            <div className="section-label-row">
+              <span className="section-label">Rewrite style</span>
+              <span className="section-hint">Choose one</span>
+            </div>
+            <div className="mode-control" role="group" aria-label="Rewrite style">
+              {MODES.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={mode === item.key ? "mode-option active" : "mode-option"}
+                  aria-pressed={mode === item.key}
+                  onClick={() => setMode(item.key)}
+                >
+                  <span>{item.label}</span>
+                  <small>{item.description}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="context-section">
+            <button
+              type="button"
+              className="context-toggle"
+              onClick={() => setShowContext((current) => !current)}
+              aria-expanded={showContext}
+            >
+              <span><span className="plus-mark">{showContext ? "−" : "+"}</span> Add context</span>
+              <small>Original email or special instructions</small>
+            </button>
+            {showContext ? (
+              <div className="context-editor">
+                <textarea
+                  value={contextText}
+                  onChange={(event) => setContextText(event.target.value)}
+                  maxLength={MAX_CONTEXT_CHARS}
+                  placeholder="Paste the message you are replying to, or tell PhraseAI what matters..."
+                  className="themed-textarea"
+                  aria-label="Optional email context"
+                />
+                <span>{contextText.length.toLocaleString()} / {MAX_CONTEXT_CHARS.toLocaleString()}</span>
+              </div>
+            ) : null}
           </div>
 
           <button
             type="button"
+            className="primary-button rewrite-button"
             disabled={loading || !rewriteReady}
             onClick={handleRewrite}
             aria-busy={loading}
-            style={{
-              marginTop: 12,
-              width: "100%",
-              padding: "10px 12px",
-              background: actionBackground,
-              color: actionColor,
-              fontSize: 13,
-              fontWeight: 600,
-              borderRadius: 12,
-              border: "none",
-              cursor: loading || !rewriteReady ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : rewriteReady ? 1 : 0.6,
-              transition: "all 150ms ease",
-            }}
           >
-            {loading ? "Rewriting..." : `Rewrite (${modeLabel})`}
+            {loading ? <span className="button-spinner dark" /> : <SparkleIcon />}
+            <span>{loading ? "Refining your message..." : `Rewrite as ${modeLabel}`}</span>
+            {!loading ? <kbd>⌘ ↵</kbd> : null}
           </button>
 
-          {error ? (
-            <p style={{ marginTop: 12, fontSize: 12, color: subduedText }}>{error}</p>
-          ) : null}
-        </div>
+          <div className="message-region" aria-live="polite">
+            {error ? <p className={`status-message ${lastRewriteSource === "fallback" ? "warning" : "error"}`}>{error}</p> : null}
+          </div>
+        </section>
 
-        <div
-          style={{
-            background: cardBackground,
-            border: `1px solid ${cardBorder}`,
-            borderRadius: 18,
-            padding: 24,
-            display: "flex",
-            flexDirection: "column",
-            minHeight: 0,
-            height: "100%",
-          }}
-        >
-          <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "2px", color: subduedText, marginBottom: 4 }}>OUTPUT</p>
-          <p style={{ fontSize: 12, lineHeight: 1.45, color: subduedText, marginBottom: 16 }}>Edit the rewritten email, then copy your final version.</p>
+        <section className="composer-panel output-panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">REFINED</span>
+              <h2>Your message, still yours.</h2>
+            </div>
+            {outputReady ? (
+              <span className={`source-badge ${lastRewriteSource}`}>
+                <span className="source-dot" />
+                {lastRewriteSource === "fallback" ? "Local fallback" : "AI rewrite"}
+              </span>
+            ) : null}
+          </div>
 
-          <textarea
-            value={rewritten}
-            onChange={(e) => setRewritten(e.target.value)}
-            maxLength={MAX_DRAFT_CHARS}
-            placeholder="Your rewritten email will appear here..."
-            className="themed-textarea"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              background: textareaBackground,
-              border: `1px solid ${textareaBorder}`,
-              borderRadius: 12,
-              padding: 16,
-              fontSize: 14,
-              color: textareaColor,
-              resize: "none",
-              width: "100%",
-              boxSizing: "border-box",
-            }}
-          />
+          <div className={`editor-shell output-editor ${loading ? "is-loading" : ""}`}>
+            {!outputReady && !loading ? (
+              <div className="output-empty" aria-hidden="true">
+                <span className="empty-icon"><SparkleIcon /></span>
+                <strong>Your refined email will appear here</strong>
+                <p>PhraseAI keeps your intent, improves clarity, and adapts to the style you choose.</p>
+              </div>
+            ) : null}
+            <textarea
+              value={rewritten}
+              onChange={(event) => setRewritten(event.target.value)}
+              maxLength={MAX_DRAFT_CHARS}
+              className="composer-textarea themed-textarea"
+              aria-label="Rewritten email"
+              disabled={loading}
+            />
+            {loading ? (
+              <div className="output-loading" aria-label="Generating rewrite">
+                <span className="loading-line wide" />
+                <span className="loading-line" />
+                <span className="loading-line medium" />
+                <span className="loading-line wide" />
+              </div>
+            ) : null}
+            <div className="editor-meta">
+              <span>{outputReady ? `${rewritten.trim().split(/\s+/).length} words` : "Editable after rewrite"}</span>
+              <span>{rewritten.length.toLocaleString()} / {MAX_DRAFT_CHARS.toLocaleString()}</span>
+            </div>
+          </div>
 
-          {loading ? <div className="rewrite-skeleton" aria-label="Generating rewrite" /> : null}
-          {lastRewriteSource === "fallback" && outputReady ? (
-            <p style={{ margin: "10px 0 0", fontSize: 12, color: subduedText }}>
-              Provider unavailable. This draft used the local fallback and can still be edited.
-            </p>
-          ) : null}
-
-          <div style={{ marginTop: "auto", paddingTop: 16, display: "flex", gap: 12 }}>
-            <button
-              type="button"
-              onClick={copyResult}
-              disabled={!outputReady}
-              style={{
-                flex: 1,
-                padding: 10,
-                background: secondaryActionBackground,
-                border: `1px solid ${cardBorder}`,
-                color: secondaryActionColor,
-                fontSize: 13,
-                borderRadius: 12,
-                cursor: outputReady ? "pointer" : "not-allowed",
-                opacity: outputReady ? 1 : 0.5,
-                transition: "all 150ms ease",
-              }}
-            >
-              {copyStatus}
+          <div className="output-actions">
+            <button type="button" className="secondary-button" onClick={copyResult} disabled={!outputReady}>
+              {copyStatus === "Copied" ? <CheckIcon /> : <CopyIcon />}
+              <span>{copyStatus}</span>
             </button>
             <button
               type="button"
+              className="primary-button"
               onClick={handleFinalizeVersion}
               disabled={learning || !finalizeReady}
               aria-busy={learning}
-              style={{
-                flex: 1,
-                padding: 10,
-                background: actionBackground,
-                color: actionColor,
-                fontSize: 13,
-                fontWeight: 500,
-                borderRadius: 12,
-                border: "none",
-                cursor: learning || !finalizeReady ? "not-allowed" : "pointer",
-                opacity: learning || !finalizeReady ? 0.55 : 1,
-                transition: "all 150ms ease",
-              }}
             >
-              {learning ? "Saving..." : "This is my final version"}
+              {learning ? <span className="button-spinner dark" /> : <CheckIcon />}
+              <span>{learning ? "Saving your style..." : "Use this version"}</span>
             </button>
           </div>
 
-          {learnMessage ? (
-            <p style={{ marginTop: 10, fontSize: 12, color: subduedText }}>{learnMessage}</p>
-          ) : null}
-        </div>
+          <div className="message-region" aria-live="polite">
+            {learnMessage ? (
+              <p className={`status-message ${/saved/i.test(learnMessage) ? "success" : "error"}`}>{learnMessage}</p>
+            ) : (
+              <p className="learning-hint">Edit the result before saving. PhraseAI learns from the version you approve.</p>
+            )}
+          </div>
+        </section>
       </div>
     );
   }
@@ -1422,224 +1263,129 @@ function App() {
   };
   const currentMeta = sectionMeta[activeSection] || sectionMeta.home;
 
-  const navActiveBg = "rgba(255,255,255,0.15)";
-  const navActiveColor = "#ffffff";
-  const navHoverBg = "rgba(255,255,255,0.1)";
-  const navInactiveColor = "rgba(255,255,255,0.55)";
-
   return (
     <div
       className="app-shell"
+      data-theme={theme}
       style={{
-        display: "flex",
-        height: "100vh",
-        width: "100vw",
-        overflow: "hidden",
-        background: tokens.pageBackground,
-        color: tokens.text,
         colorScheme: theme,
-        fontFamily: "Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif",
-        WebkitFontSmoothing: "antialiased",
-        MozOsxFontSmoothing: "grayscale",
+        "--page-bg": tokens.pageBackground,
+        "--card": tokens.surface,
+        "--panel": tokens.surfaceStrong,
+        "--text": tokens.text,
+        "--muted": tokens.muted,
+        "--soft": tokens.soft,
+        "--border": tokens.border,
+        "--surface": tokens.surface,
+        "--surface-strong": tokens.surfaceStrong,
+        "--field-bg": tokens.fieldBg,
+        "--field-text": tokens.fieldText,
+        "--primary-bg": tokens.primaryBg,
+        "--primary-text": tokens.primaryText,
+        "--secondary-bg": tokens.secondaryBg,
+        "--secondary-text": tokens.secondaryText,
+        "--active-bg": tokens.activeNavBg,
+        "--active-text": tokens.activeNavText,
+        "--badge-bg": tokens.badgeBg,
+        "--badge-border": tokens.badgeBorder,
         "--placeholder-color": tokens.fieldPlaceholder,
       }}
     >
       <aside
         className="app-sidebar"
-        style={{
-          width: 88,
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          padding: "16px 0",
-          background: theme === "dark" ? "#111111" : "rgba(255,255,255,0.65)",
-          borderRight: `1px solid ${tokens.border}`,
-          boxSizing: "border-box",
-        }}
       >
-        <BrandLogoIcon light={theme === "light"} />
+        <div className="sidebar-brand">
+          <BrandLogoIcon light={theme === "light"} />
+          <div className="sidebar-brand-copy">
+            <strong>PhraseAI</strong>
+            <span>Writing workspace</span>
+          </div>
+        </div>
 
-        <nav style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 18 }}>
+        <nav className="sidebar-nav" aria-label="Main navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeSection === item.key;
             return (
-              <div key={item.key} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => setActiveSection(item.key)}
-                  onMouseEnter={() => setHoveredNav(item.key)}
-                  onMouseLeave={() => setHoveredNav((current) => (current === item.key ? null : current))}
-                  aria-current={active ? "page" : undefined}
-                  title={item.label}
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 14,
-                    border: "none",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: active ? tokens.activeNavBg : "transparent",
-                    color: active ? tokens.activeNavText : tokens.inactiveNavText,
-                    cursor: "pointer",
-                    transition: "transform 150ms ease, background 150ms ease, color 150ms ease",
-                    transform: hoveredNav === item.key ? "scale(1.05)" : "scale(1)",
-                    boxShadow: active ? "inset 2px 0 0 rgba(255,255,255,0.85)" : "none",
-                  }}
-                >
-                  <Icon />
-                </button>
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 52,
-                    top: "50%",
-                    transform: hoveredNav === item.key ? "translate(0, -50%)" : "translate(-4px, -50%)",
-                    opacity: hoveredNav === item.key ? 1 : 0,
-                    transition: "all 140ms ease",
-                    background: theme === "dark" ? "#1a1a1a" : "#ffffff",
-                    color: tokens.text,
-                    border: `1px solid ${tokens.border}`,
-                    borderRadius: 10,
-                    padding: "6px 10px",
-                    fontSize: 12,
-                    whiteSpace: "nowrap",
-                    pointerEvents: "none",
-                    zIndex: 40,
-                  }}
-                >
-                  {item.label}
-                </div>
-              </div>
+              <button
+                key={item.key}
+                type="button"
+                className={active ? "sidebar-link active" : "sidebar-link"}
+                onClick={() => setActiveSection(item.key)}
+                aria-current={active ? "page" : undefined}
+                title={item.label}
+              >
+                <Icon />
+                <span className="sidebar-link-copy">
+                  <strong>{item.label}</strong>
+                  <small>{item.description}</small>
+                </span>
+              </button>
             );
           })}
         </nav>
 
-        <div style={{ marginTop: "auto", position: "relative" }}>
+        <div className="sidebar-footer">
           <button
             type="button"
+            className={isSettings ? "sidebar-link active" : "sidebar-link"}
             onClick={() => setActiveSection("settings")}
-            onMouseEnter={() => setHoveredNav("settings")}
-            onMouseLeave={() => setHoveredNav((current) => (current === "settings" ? null : current))}
             aria-current={isSettings ? "page" : undefined}
             title="Settings"
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 14,
-              border: "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: isSettings ? tokens.activeNavBg : "transparent",
-              color: isSettings ? tokens.activeNavText : tokens.inactiveNavText,
-              cursor: "pointer",
-              transition: "transform 150ms ease, background 150ms ease, color 150ms ease",
-              transform: hoveredNav === "settings" ? "scale(1.05)" : "scale(1)",
-            }}
           >
             <SettingsIcon />
+            <span className="sidebar-link-copy">
+              <strong>Settings</strong>
+              <small>Theme and preferences</small>
+            </span>
           </button>
-          <div
-            style={{
-              position: "absolute",
-              left: 52,
-              top: "50%",
-              transform: hoveredNav === "settings" ? "translate(0, -50%)" : "translate(-4px, -50%)",
-              opacity: hoveredNav === "settings" ? 1 : 0,
-              transition: "all 140ms ease",
-              background: theme === "dark" ? "#1a1a1a" : "#ffffff",
-              color: tokens.text,
-              border: `1px solid ${tokens.border}`,
-              borderRadius: 10,
-              padding: "6px 10px",
-              fontSize: 12,
-              whiteSpace: "nowrap",
-              pointerEvents: "none",
-              zIndex: 40,
-            }}
-          >
-            Settings
-          </div>
 
           <button
             type="button"
+            className={isAccount ? "account-button active" : "account-button"}
             onClick={() => setActiveSection("account")}
-            style={{
-              width: 40,
-              height: 40,
-              marginTop: 10,
-              borderRadius: 999,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: tokens.badgeBg,
-              color: tokens.text,
-              border: `1px solid ${tokens.badgeBorder}`,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "all 150ms ease",
-              transform: isAccount ? "scale(1.06)" : "scale(1)",
-            }}
             title={`${accountName} (account settings)`}
             aria-label="Account"
           >
-            {isAccount ? <AccountIcon /> : accountInitials}
+            <span className="account-avatar">{accountInitials}</span>
+            <span className="account-copy">
+              <strong>{session?.user?.email?.split("@")[0] || "Account"}</strong>
+              <small>Manage account</small>
+            </span>
           </button>
         </div>
       </aside>
 
       <main
         className="app-main"
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
       >
-        <header
-          className="app-header"
-          style={{
-            padding: "20px 24px",
-            borderBottom: `1px solid ${tokens.border}`,
-            flexShrink: 0,
-          }}
-        >
-          <div className="app-header-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <header className="app-header">
+          <div className="app-header-row">
             <div>
-              <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.04em", margin: 0, color: tokens.text }}>
-                {currentMeta.title}
-              </h1>
-              <p style={{ fontSize: 13, color: tokens.muted, marginTop: 4, marginBottom: 0 }}>
-                {currentMeta.sub}
-              </p>
+              <span className="eyebrow">{activeSection === "home" ? "WORKSPACE" : activeSection.replace("-", " ").toUpperCase()}</span>
+              <h1>{currentMeta.title}</h1>
+              <p>{currentMeta.sub}</p>
             </div>
-            <div className="app-header-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="app-header-actions">
               {aiInfo?.model ? (
-                <span style={{ fontSize: 11, color: tokens.soft, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  AI: {aiInfo.provider || "unknown"} / {aiInfo.model}
+                <span className="model-status" title={aiInfo.model}>
+                  <span />
+                  {aiInfo.provider || "AI"} online
                 </span>
               ) : null}
-              <span style={{ fontSize: 12, color: tokens.muted, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {session?.user?.email || "Signed in"}
-              </span>
               <button
                 type="button"
+                className="icon-button"
+                onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+                title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              >
+                <ThemeIcon theme={theme} />
+              </button>
+              <button
+                type="button"
+                className="header-signout"
                 onClick={handleSignOut}
-                style={{
-                  border: `1px solid ${tokens.border}`,
-                  background: tokens.secondaryBg,
-                  color: tokens.secondaryText,
-                  borderRadius: 10,
-                  padding: "8px 10px",
-                  fontSize: 12,
-                  cursor: "pointer",
-                }}
               >
                 Sign out
               </button>
@@ -1647,7 +1393,7 @@ function App() {
           </div>
         </header>
 
-        <div className="app-content" style={{ padding: 24, boxSizing: "border-box", flex: 1, minHeight: 0, overflow: "auto" }}>
+        <div className="app-content">
           {isHome ? renderHome() : null}
           {isHistory ? renderHistory() : null}
           {isSettings ? renderSettings() : null}

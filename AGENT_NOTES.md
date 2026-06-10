@@ -28,11 +28,16 @@
 - Added shared focus-visible, hover, transition, and rewrite-progress styling.
 - Provider fallback is clearly identified without blocking user editing.
 - Password recovery now has a dedicated update-password form.
+- Rebuilt authentication as a focused two-column desktop experience that puts the form first on mobile.
+- Reworked the authenticated shell with persistent navigation labels, compact status controls, and a five-item mobile bottom bar.
+- Reframed the composer as a continuous input-to-output workflow with live counts, clearer rewrite modes, optional context, loading skeletons, and semantic feedback.
+- Normalized light/dark theme tokens and verified both modes at a 390px mobile viewport without horizontal overflow.
 
 ### Remaining Polish
 - Break `App.jsx` into focused auth, shell, composer, history, and profile components.
 - Replace remaining inline styles with a small design-token/component layer.
 - Add browser screenshot regression coverage for dark/light desktop and mobile layouts.
+- Run the authenticated composer workflow against a dedicated non-production Supabase test account.
 
 ## Auth & Database
 
