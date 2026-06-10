@@ -2,12 +2,16 @@ import sys
 import unittest
 from pathlib import Path
 
+from fastapi import HTTPException
+from pydantic import ValidationError
+
 # AGENT5: [CHANGE] Tests resolve the backend package when discovery is launched from the repository root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.main import (
     LearnRequest,
     RewriteRequest,
     build_rewrite_prompt,
+    call_openrouter,
     classify_provider_error,
     env_flag,
     profile_prompt_context,
@@ -105,6 +109,7 @@ class PipelineTests(unittest.TestCase):
 
 
 class RewriteRouteTests(unittest.IsolatedAsyncioTestCase):
+    # TESTER: [TEST CASE] Provider billing failures must degrade through the backend, never the browser.
     async def test_provider_billing_failure_returns_categorized_backend_fallback(self):
         from unittest.mock import AsyncMock, patch
 
@@ -126,6 +131,107 @@ class RewriteRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.source, "fallback")
         self.assertEqual(response.fallback_reason, "billing")
         self.assertTrue(response.rewritten)
+        self.assertTrue(response.request_id)
+
+    # TESTER: [TEST CASE] Rate limits and timeouts remain distinguishable for the UI and production logs.
+    async def test_provider_rate_limit_and_timeout_are_categorized(self):
+        from unittest.mock import AsyncMock, patch
+
+        class RateLimitError(Exception):
+            status_code = 429
+
+        payload = RewriteRequest(draft="please send an update", mode="fix_grammar")
+        for error, expected_reason in [(RateLimitError(), "rate_limited"), (TimeoutError(), "timeout")]:
+            with self.subTest(expected_reason=expected_reason):
+                with (
+                    patch("app.main.get_profile_for_user_async", new=AsyncMock(return_value={})),
+                    patch("app.main.call_llm_rewrite", new=AsyncMock(side_effect=error)),
+                    patch.dict("os.environ", {"ENABLE_LOCAL_REWRITE_FALLBACK": "true"}),
+                ):
+                    response = await rewrite_email(payload, {"id": "test-user"})
+
+                self.assertEqual(response.source, "fallback")
+                self.assertEqual(response.fallback_reason, expected_reason)
+
+    # TESTER: [TEST CASE] Prompt preparation failures must identify the pre-provider stage instead of blaming AI availability.
+    async def test_prompt_construction_failure_returns_typed_stage(self):
+        from unittest.mock import AsyncMock, patch
+
+        payload = RewriteRequest(draft="hello", mode="more_professional")
+        with (
+            patch("app.main.get_profile_for_user_async", new=AsyncMock(return_value={})),
+            patch("app.main.build_rewrite_prompt", side_effect=TypeError("bad profile shape")),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                await rewrite_email(payload, {"id": "test-user"})
+
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertEqual(raised.exception.detail["stage"], "prompt")
+        self.assertTrue(raised.exception.detail["request_id"])
+
+    # TESTER: [TEST CASE] Empty drafts are rejected before auth/provider work.
+    def test_empty_draft_is_rejected(self):
+        for draft in ["", " ", "\t", "\n"]:
+            with self.subTest(draft=repr(draft)):
+                with self.assertRaises(ValidationError):
+                    RewriteRequest(draft=draft, mode="more_professional")
+
+    async def test_provider_authentication_failure_is_categorized(self):
+        from unittest.mock import AsyncMock, patch
+
+        class AuthenticationError(Exception):
+            status_code = 401
+
+        payload = RewriteRequest(draft="hello", mode="more_professional")
+        with (
+            patch("app.main.get_profile_for_user_async", new=AsyncMock(return_value={})),
+            patch("app.main.call_llm_rewrite", new=AsyncMock(side_effect=AuthenticationError())),
+            patch.dict("os.environ", {"ENABLE_LOCAL_REWRITE_FALLBACK": "true"}),
+        ):
+            response = await rewrite_email(payload, {"id": "test-user"})
+
+        self.assertEqual(response.source, "fallback")
+        self.assertEqual(response.fallback_reason, "authentication")
+
+    def test_openrouter_timeout_preserves_timeout_status(self):
+        from unittest.mock import patch
+
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "ANTHROPIC_API_KEY": "sk-or-test",
+                    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api/v1",
+                },
+                clear=True,
+            ),
+            patch("app.main.urllib_request.urlopen", side_effect=TimeoutError()),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                call_openrouter("prompt", "openrouter/auto", 128)
+
+        self.assertEqual(raised.exception.status_code, 504)
+
+    def test_openrouter_malformed_response_is_rejected(self):
+        from unittest.mock import MagicMock, patch
+
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'{"choices":[]}'
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "ANTHROPIC_API_KEY": "sk-or-test",
+                    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api/v1",
+                },
+                clear=True,
+            ),
+            patch("app.main.urllib_request.urlopen", return_value=response),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                call_openrouter("prompt", "openrouter/auto", 128)
+
+        self.assertEqual(raised.exception.status_code, 502)
 
 
 if __name__ == "__main__":

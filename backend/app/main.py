@@ -3,7 +3,11 @@ import json
 import logging
 import os
 import re
+import time
+import uuid
+from collections import Counter, deque
 from datetime import datetime, timezone
+from threading import Lock
 from typing import Literal
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -33,10 +37,19 @@ class RewriteRequest(BaseModel):
     mode: Literal["more_professional", "sound_smarter", "fix_grammar"]
     context: str | None = Field(default=None, max_length=MAX_CONTEXT_CHARS)
 
+    @field_validator("draft")
+    @classmethod
+    def validate_nonempty_draft(cls, value: str) -> str:
+        # TESTER: [TEST CASE] Whitespace-only drafts never reach auth, prompt construction, or a provider.
+        if not value.strip():
+            raise ValueError("Draft must contain text.")
+        return value
+
 
 class RewriteResponse(BaseModel):
     rewritten: str
     source: Literal["provider", "fallback"] = "provider"
+    request_id: str
     fallback_reason: Literal[
         "rate_limited",
         "billing",
@@ -101,6 +114,53 @@ app.add_middleware(
 )
 
 logger = logging.getLogger("phraseai.api")
+fallback_events: deque[tuple[float, str | None]] = deque()
+fallback_events_lock = Lock()
+last_fallback_alert_at = 0.0
+
+
+def log_event(event: str, **fields) -> None:
+    # MONITOR: [OBSERVABILITY] Structured fields deliberately exclude users, content, tokens, and provider bodies.
+    logger.info(json.dumps({"event": event, **fields}, sort_keys=True))
+
+
+def estimated_tokens(text: str) -> int:
+    return max(1, (len(text) + 3) // 4)
+
+
+def record_rewrite_outcome(fallback_reason: str | None) -> None:
+    global last_fallback_alert_at
+
+    now = time.monotonic()
+    window_seconds = int(os.getenv("FALLBACK_ALERT_WINDOW_SECONDS", "300"))
+    min_requests = int(os.getenv("FALLBACK_ALERT_MIN_REQUESTS", "10"))
+    alert_rate = float(os.getenv("FALLBACK_ALERT_RATE", "0.25"))
+    cooldown_seconds = int(os.getenv("FALLBACK_ALERT_COOLDOWN_SECONDS", "300"))
+
+    with fallback_events_lock:
+        fallback_events.append((now, fallback_reason))
+        while fallback_events and now - fallback_events[0][0] > window_seconds:
+            fallback_events.popleft()
+
+        request_count = len(fallback_events)
+        reasons = Counter(reason for _, reason in fallback_events if reason)
+        fallback_count = sum(reasons.values())
+        current_rate = fallback_count / request_count if request_count else 0.0
+        should_alert = (
+            request_count >= min_requests
+            and current_rate >= alert_rate
+            and now - last_fallback_alert_at >= cooldown_seconds
+        )
+        if should_alert:
+            last_fallback_alert_at = now
+            log_event(
+                "llm.fallback_rate_alert",
+                window_seconds=window_seconds,
+                request_count=request_count,
+                fallback_count=fallback_count,
+                fallback_rate=round(current_rate, 4),
+                fallback_reasons=dict(reasons),
+            )
 
 
 async def run_blocking_io(func, *args, **kwargs):
@@ -217,6 +277,8 @@ async def get_current_user(authorization: str | None = Header(default=None)) -> 
         # AGENT3: [CHANGE] Token validation no longer blocks concurrent FastAPI requests.
         user_response = await run_blocking_io(supabase.auth.get_user, token)
     except Exception as exc:
+        # INSPECTOR: [SILENT CATCH] Authentication dependency failures now leave a privacy-safe runtime signal.
+        log_event("dependency.error", component="supabase", operation="auth_validate", exception_type=exc.__class__.__name__)
         raise HTTPException(status_code=401, detail="Invalid or expired auth token.") from exc
 
     user = getattr(user_response, "user", None)
@@ -290,7 +352,12 @@ def call_openrouter(prompt: str, model_name: str, max_tokens: int) -> str:
         logger.warning("OpenRouter request failed with status %s.", status_code)
         raise HTTPException(status_code=status_code, detail="AI provider request failed.") from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="AI provider request failed.") from exc
+        reason = getattr(exc, "reason", None)
+        timeout_like = isinstance(exc, TimeoutError) or isinstance(reason, TimeoutError) or "timeout" in exc.__class__.__name__.lower()
+        raise HTTPException(
+            status_code=504 if timeout_like else 502,
+            detail="AI provider request timed out." if timeout_like else "AI provider request failed.",
+        ) from exc
 
     choices = data.get("choices") or []
     if not choices:
@@ -467,6 +534,7 @@ def call_anthropic(prompt: str, model_name: str, max_tokens: int) -> str:
 async def call_llm_rewrite(prompt: str, model_name: str, max_tokens: int) -> str:
     # AGENT1: [CHANGE] Both provider paths are async at the FastAPI boundary.
     # AGENT1: [SUGGESTION] TODO: add SSE only with cancellation and partial-output handling across both providers.
+    # SCOUT: [EASY SWAP] This dispatch point can add an OpenAI-compatible Groq adapter or funded OpenRouter backup.
     provider_call = call_openrouter_with_retries if should_use_openrouter() else call_anthropic
     return await run_blocking_io(provider_call, prompt, model_name, max_tokens)
 
@@ -714,21 +782,60 @@ def ai_model_info() -> dict:
 
 @app.post("/rewrite", response_model=RewriteResponse)
 async def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(get_current_user)) -> RewriteResponse:
+    # DETECTIVE: [TRIGGER FOUND] Dependency failures in get_current_user occur before this provider fallback boundary.
+    request_id = uuid.uuid4().hex[:16]
+    started_at = time.perf_counter()
     user_id = current_user["id"]
     model_name = resolve_model_name()
     max_tokens = resolve_max_tokens()
 
     try:
         style_profile = await get_profile_for_user_async(user_id)
-    except Exception:
+    except Exception as exc:
+        # DETECTIVE: [REAL ERROR HIDDEN HERE] Storage failures currently degrade to an empty style profile.
+        log_event(
+            "dependency.error",
+            request_id=request_id,
+            component="supabase",
+            operation="profile_load",
+            exception_type=exc.__class__.__name__,
+        )
         # Keep rewrite path alive even if profile storage has transient issues.
         style_profile = {}
-    prompt = build_rewrite_prompt(payload, style_profile)
+    try:
+        prompt = build_rewrite_prompt(payload, style_profile)
+    except Exception as exc:
+        # ARCHITECT: [STRUCTURAL FLAW] Prompt preparation is a distinct pre-provider failure boundary.
+        log_event(
+            "rewrite.failed",
+            request_id=request_id,
+            stage="prompt",
+            exception_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Could not prepare the rewrite.", "stage": "prompt", "request_id": request_id},
+        ) from exc
 
     try:
-        return RewriteResponse(
-            rewritten=await call_llm_rewrite(prompt, model_name, max_tokens),
+        rewritten = await call_llm_rewrite(prompt, model_name, max_tokens)
+        latency_ms = round((time.perf_counter() - started_at) * 1000)
+        log_event(
+            "rewrite.completed",
+            request_id=request_id,
+            provider="openrouter" if should_use_openrouter() else "anthropic",
+            model=model_name,
+            estimated_prompt_tokens=estimated_tokens(prompt),
+            max_output_tokens=max_tokens,
+            latency_ms=latency_ms,
             source="provider",
+            status="success",
+        )
+        record_rewrite_outcome(None)
+        return RewriteResponse(
+            rewritten=rewritten,
+            source="provider",
+            request_id=request_id,
         )
     except Exception as exc:
         fallback_enabled = env_flag("ENABLE_LOCAL_REWRITE_FALLBACK", True)
@@ -745,13 +852,43 @@ async def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(ge
                 exc.__class__.__name__,
             )
             fallback = local_rewrite_fallback(payload.draft, payload.mode, style_profile, payload.context)
+            latency_ms = round((time.perf_counter() - started_at) * 1000)
+            log_event(
+                "rewrite.completed",
+                request_id=request_id,
+                provider="openrouter" if should_use_openrouter() else "anthropic",
+                model=model_name,
+                estimated_prompt_tokens=estimated_tokens(prompt),
+                max_output_tokens=max_tokens,
+                latency_ms=latency_ms,
+                source="fallback",
+                status="degraded",
+                http_status=status_code,
+                fallback_reason=fallback_reason,
+                exception_type=exc.__class__.__name__,
+            )
+            record_rewrite_outcome(fallback_reason)
             return RewriteResponse(
                 rewritten=fallback or payload.draft.strip(),
                 source="fallback",
+                request_id=request_id,
                 fallback_reason=fallback_reason,
             )
 
-        raise HTTPException(status_code=502, detail="Rewrite service is temporarily unavailable.") from exc
+        log_event(
+            "rewrite.failed",
+            request_id=request_id,
+            stage="provider",
+            provider="openrouter" if should_use_openrouter() else "anthropic",
+            model=model_name,
+            http_status=status_code,
+            fallback_reason=fallback_reason,
+            exception_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={"message": "Rewrite service is temporarily unavailable.", "stage": "provider", "request_id": request_id},
+        ) from exc
 
 
 @app.get("/profile/me")

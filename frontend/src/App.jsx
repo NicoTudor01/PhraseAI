@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { validateRewriteResponse } from "./rewriteResponse";
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "https://phraseai-production.up.railway.app";
+// ARCHITECT: [RECOMMENDED PATTERN] Production uses the same-origin Vercel proxy, avoiding CORS as a rewrite dependency.
+const API_URL = import.meta.env.DEV ? import.meta.env.VITE_API_URL || "/api" : "/api";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 // AGENT3: [CHANGE] Preserve Supabase sessions by default; forced sign-out is reserved for explicit test deployments.
@@ -13,7 +14,18 @@ const THEME_STORAGE_KEY = "phraseai-theme";
 const IS_DEV = import.meta.env.DEV;
 const LOGIN_RATE_LIMIT_MAX = 5;
 const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const API_TIMEOUT_MS = 65000;
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+class ApiRequestError extends Error {
+  constructor(message, { status = 0, stage = "unknown", requestId = "" } = {}) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.stage = stage;
+    this.requestId = requestId;
+  }
+}
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -195,46 +207,6 @@ function getInitials(value) {
   return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
-function finalizeSentence(value) {
-  const cleaned = String(value || "").replace(/\s+/g, " ").trim();
-  if (!cleaned) return "";
-  const normalized = cleaned.length > 1 ? `${cleaned[0].toUpperCase()}${cleaned.slice(1)}` : cleaned.toUpperCase();
-  return /[.!?]$/.test(normalized) ? normalized : `${normalized}.`;
-}
-
-function localRewriteFallback(draftValue, selectedMode, contextValue) {
-  let text = finalizeSentence(draftValue);
-  if (!text) return "";
-
-  const replacements = [
-    [/\bu\b/gi, "you"],
-    [/\bur\b/gi, "your"],
-    [/\bpls\b/gi, "please"],
-    [/\bthx\b/gi, "thanks"],
-    [/\bim\b/gi, "I am"],
-    [/\bdont\b/gi, "do not"],
-    [/\bcant\b/gi, "cannot"],
-    [/\bwont\b/gi, "will not"],
-  ];
-
-  replacements.forEach(([pattern, replacement]) => {
-    text = text.replace(pattern, replacement);
-  });
-
-  if (selectedMode === "fix_grammar") {
-    return text;
-  }
-
-  if (selectedMode === "more_professional") {
-    const polished = text.replace(/\b(hey|hi)\b/gi, "Hello");
-    const withContext = contextValue?.trim() ? `${polished} I have incorporated the provided context.` : polished;
-    return /thank you\.$/i.test(withContext) ? withContext : `${withContext} Thank you.`;
-  }
-
-  const withContext = contextValue?.trim() ? `${text} This reflects the additional context provided.` : text;
-  return `${withContext} This version improves clarity and strengthens the message.`;
-}
-
 function App() {
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
@@ -265,6 +237,7 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [aiInfo, setAiInfo] = useState(null);
+  const [lastDiagnostic, setLastDiagnostic] = useState(null);
   const loginAttemptsRef = useRef(new Map());
   const accountName = session?.user?.email || "Client";
   const accountInitials = getInitials(accountName);
@@ -320,23 +293,31 @@ function App() {
         return;
       }
 
-      const { data, error: sessionError } = await supabase.auth.getSession();
-      if (!mounted) return;
+      try {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (!mounted) return;
 
-      if (sessionError) {
-        setAuthError(sessionError.message || "Could not read current session.");
+        if (sessionError) {
+          setAuthError(sessionError.message || "Could not read current session.");
+        }
+
+        if (FORCE_LOGIN_ON_VISIT && data.session) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setAuthMessage("Please sign in to continue.");
+          return;
+        }
+
+        setSession(data.session || null);
+      } catch {
+        // INSPECTOR: [SILENT CATCH] Auth bootstrap failures now resolve to the login screen instead of hanging forever.
+        if (mounted) {
+          setSession(null);
+          setAuthError("Could not connect to authentication. Please refresh and try again.");
+        }
+      } finally {
+        if (mounted) setAuthReady(true);
       }
-
-      if (FORCE_LOGIN_ON_VISIT && data.session) {
-        await supabase.auth.signOut();
-        setSession(null);
-        setAuthMessage("Please sign in to continue.");
-        setAuthReady(true);
-        return;
-      }
-
-      setSession(data.session || null);
-      setAuthReady(true);
     }
 
     bootstrapAuth();
@@ -392,13 +373,24 @@ function App() {
 
   async function apiFetch(path, options = {}) {
     if (!supabase) {
-      throw new Error("Authentication is unavailable.");
+      // DETECTIVE: [TRIGGER FOUND] This statusless auth setup error was previously misclassified as an AI outage.
+      throw new ApiRequestError("Authentication is unavailable.", { stage: "auth_setup" });
     }
 
-    const { data: sessionData } = await supabase.auth.getSession();
+    let sessionResult;
+    try {
+      sessionResult = await supabase.auth.getSession();
+    } catch {
+      // INSPECTOR: [SILENT CATCH] Session transport failures are now typed separately from provider failures.
+      throw new ApiRequestError("Could not verify your session. Please sign in again.", { stage: "session" });
+    }
+    const { data: sessionData, error: sessionError } = sessionResult;
+    if (sessionError) {
+      throw new ApiRequestError("Could not verify your session. Please sign in again.", { stage: "session" });
+    }
     let activeSession = sessionData.session || session;
     if (!activeSession?.access_token) {
-      throw new Error("You must be logged in.");
+      throw new ApiRequestError("You must be logged in.", { status: 401, stage: "session" });
     }
 
     async function sendRequest(accessToken) {
@@ -407,23 +399,58 @@ function App() {
         Authorization: `Bearer ${accessToken}`,
         ...(options.headers || {}),
       };
-      return fetch(`${API_URL}${path}`, { ...options, headers });
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+      try {
+        return await fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal });
+      } catch (requestError) {
+        const timedOut = requestError?.name === "AbortError";
+        throw new ApiRequestError(
+          timedOut ? "PhraseAI took too long to respond. Please try again." : "Could not reach PhraseAI. Check your connection and try again.",
+          { stage: timedOut ? "timeout" : "transport" },
+        );
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
     }
 
     let response = await sendRequest(activeSession.access_token);
     if (response.status === 401) {
       // AGENT3: [CHANGE] Retry one authenticated request after token refresh before ending the session.
-      const { data: refreshedData } = await supabase.auth.refreshSession();
+      let refreshResult;
+      try {
+        refreshResult = await supabase.auth.refreshSession();
+      } catch {
+        throw new ApiRequestError("Your session could not be refreshed. Please sign in again.", { status: 401, stage: "session" });
+      }
+      const { data: refreshedData, error: refreshError } = refreshResult;
+      if (refreshError) {
+        throw new ApiRequestError("Your session could not be refreshed. Please sign in again.", { status: 401, stage: "session" });
+      }
       activeSession = refreshedData.session;
       if (activeSession?.access_token) {
         response = await sendRequest(activeSession.access_token);
       }
     }
 
-    const data = await response.json().catch(() => ({}));
+    const responseText = await response.text();
+    let data = {};
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        if (response.ok) {
+          throw new ApiRequestError("PhraseAI returned an invalid response. Please try again.", {
+            status: response.status,
+            stage: "response",
+          });
+        }
+      }
+    }
 
     if (!response.ok) {
       // AGENT4: [HARDENED] UI shows stable messages instead of raw backend/provider exception strings.
+      const problem = typeof data.detail === "object" && data.detail ? data.detail : data;
       const safeMessage =
         response.status === 401
           ? "Your session expired. Please sign in again."
@@ -431,10 +458,25 @@ function App() {
             ? "This draft or context is too large or invalid."
             : typeof data.detail === "string"
               ? data.detail
+              : typeof problem.message === "string"
+                ? problem.message
               : "Request failed.";
-      const requestError = new Error(safeMessage);
-      requestError.status = response.status;
-      throw requestError;
+      throw new ApiRequestError(safeMessage, {
+        status: response.status,
+        stage: problem.stage || "backend",
+        requestId: problem.request_id || "",
+      });
+    }
+
+    if (path === "/rewrite") {
+      try {
+        validateRewriteResponse(data);
+      } catch {
+        throw new ApiRequestError("PhraseAI returned an incomplete rewrite. Please try again.", {
+          status: response.status,
+          stage: "response",
+        });
+      }
     }
 
     return data;
@@ -483,6 +525,13 @@ function App() {
       setLastAiOutput(data.rewritten || "");
       setLastRewriteSource(data.source || "provider");
       setLearnMessage("");
+      setLastDiagnostic({
+        stage: data.source === "fallback" ? "provider" : "complete",
+        status: 200,
+        source: data.source || "provider",
+        reason: data.fallback_reason || "",
+        requestId: data.request_id || "",
+      });
       if (data.source === "fallback") {
         const fallbackMessages = {
           rate_limited: "The AI provider is rate-limited right now. A local rewrite is shown instead.",
@@ -495,22 +544,17 @@ function App() {
         setError(fallbackMessages[data.fallback_reason] || fallbackMessages.provider_unavailable);
       }
     } catch (err) {
+      // DETECTIVE: [REAL ERROR HIDDEN HERE] Statusless session/network failures enter the same user-facing fallback as provider outages.
       const message = err?.message || "Unexpected rewrite error.";
-      const authLikeFailure = /authorization|auth token|logged in|401/i.test(message);
-      const canUseFallback = !err?.status || err.status >= 500;
-
-      // AGENT5: [CHANGE] Local fallback is reserved for provider/network outages, not invalid API requests.
-      if (!authLikeFailure && canUseFallback) {
-        const fallback = localRewriteFallback(draft, mode, contextText);
-        if (fallback) {
-          setRewritten(fallback);
-          setLastAiOutput(fallback);
-          setLastRewriteSource("fallback");
-          setError("AI service is temporarily unavailable. Displaying a safe fallback rewrite.");
-          return;
-        }
-      }
-
+      // ARCHITECT: [STRUCTURAL FLAW] The browser no longer fabricates an AI fallback for session, transport, or backend failures.
+      setLastDiagnostic({
+        stage: err?.stage || "unknown",
+        status: err?.status || 0,
+        source: "error",
+        reason: "",
+        requestId: err?.requestId || "",
+      });
+      setLastRewriteSource("provider");
       setError(message);
     } finally {
       setLoading(false);
@@ -965,6 +1009,12 @@ function App() {
 
           <div className="message-region" aria-live="polite">
             {error ? <p className={`status-message ${lastRewriteSource === "fallback" ? "warning" : "error"}`}>{error}</p> : null}
+            {IS_DEV && lastDiagnostic ? (
+              <details className="status-message">
+                <summary>Rewrite diagnostic</summary>
+                <pre>{JSON.stringify(lastDiagnostic, null, 2)}</pre>
+              </details>
+            ) : null}
           </div>
         </section>
 
