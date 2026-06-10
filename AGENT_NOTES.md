@@ -3,6 +3,9 @@
 ## Architecture & LLM Pipeline
 
 ### Fixed
+- **P0:** Migrated the Anthropic default from deprecated `claude-sonnet-4-20250514` to `claude-sonnet-4-6`; stale production pins are upgraded automatically before the June 15, 2026 retirement.
+- **P0:** Provider failures now preserve a safe operational category (billing, rate limit, credentials, model, timeout, outage) so the UI no longer hides the cause behind a generic fallback warning.
+- **P1:** Anthropic requests now have bounded timeout/retry settings, and fallback configuration accepts common deployment boolean formats.
 - **P0:** Removed authenticated user IDs and raw `recent_examples` email excerpts from LLM prompts.
 - **P1:** Moved synchronous Anthropic, OpenRouter, Supabase auth, and database calls off the FastAPI event loop with `asyncio.to_thread`.
 - **P1:** Added input length limits, prompt truncation, and a clamped output-token budget.

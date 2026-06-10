@@ -22,7 +22,10 @@ MAX_CONTEXT_CHARS = int(os.getenv("MAX_CONTEXT_CHARS", "8000"))
 MAX_FINAL_CHARS = int(os.getenv("MAX_FINAL_CHARS", "12000"))
 MAX_PROFILE_JSON_CHARS = int(os.getenv("MAX_PROFILE_JSON_CHARS", "24000"))
 ALLOWED_PROFILE_KEYS = {"stats", "preferences", "persona", "guidance", "recent_examples"}
-RETRYABLE_PROVIDER_STATUSES = {429, 500, 502, 503, 504}
+RETRYABLE_PROVIDER_STATUSES = {429, 500, 502, 503, 504, 529}
+DEPRECATED_ANTHROPIC_MODEL_REPLACEMENTS = {
+    "claude-sonnet-4-20250514": "claude-sonnet-4-6",
+}
 
 
 class RewriteRequest(BaseModel):
@@ -34,6 +37,14 @@ class RewriteRequest(BaseModel):
 class RewriteResponse(BaseModel):
     rewritten: str
     source: Literal["provider", "fallback"] = "provider"
+    fallback_reason: Literal[
+        "rate_limited",
+        "billing",
+        "authentication",
+        "model_unavailable",
+        "timeout",
+        "provider_unavailable",
+    ] | None = None
 
 
 class ProfileRequest(BaseModel):
@@ -122,7 +133,21 @@ def get_anthropic() -> Anthropic:
             detail="Missing ANTHROPIC_API_KEY environment variable.",
         )
 
-    client_kwargs = {"api_key": api_key}
+    try:
+        timeout_seconds = float(os.getenv("ANTHROPIC_TIMEOUT_SECONDS", "30"))
+    except ValueError:
+        timeout_seconds = 30.0
+    try:
+        max_retries = int(os.getenv("ANTHROPIC_MAX_RETRIES", "2"))
+    except ValueError:
+        max_retries = 2
+
+    # AGENT1: [CHANGE] Bound provider latency so Railway cannot outlive the browser request indefinitely.
+    client_kwargs = {
+        "api_key": api_key,
+        "timeout": max(5.0, min(timeout_seconds, 120.0)),
+        "max_retries": max(0, min(max_retries, 5)),
+    }
     if base_url:
         client_kwargs["base_url"] = base_url
 
@@ -148,13 +173,18 @@ def should_use_openrouter() -> bool:
 def resolve_model_name() -> str:
     env_model = (os.getenv("LLM_MODEL") or "").strip()
     if env_model:
+        # AGENT1: [CHANGE] Prevent stale deployment variables from pinning models at retirement.
+        if not should_use_openrouter() and env_model in DEPRECATED_ANTHROPIC_MODEL_REPLACEMENTS:
+            replacement = DEPRECATED_ANTHROPIC_MODEL_REPLACEMENTS[env_model]
+            logger.warning("Replacing deprecated Anthropic model %s with %s.", env_model, replacement)
+            return replacement
         return env_model
 
     if should_use_openrouter():
         # Prefer a broadly available free model by default.
         return (os.getenv("OPENROUTER_DEFAULT_MODEL") or "meta-llama/llama-3.1-8b-instruct:free").strip()
 
-    return "claude-sonnet-4-20250514"
+    return "claude-sonnet-4-6"
 
 
 def resolve_openrouter_fallback_models() -> list[str]:
@@ -450,6 +480,35 @@ def resolve_max_tokens() -> int:
     return max(128, min(configured, 2400))
 
 
+def env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def provider_error_status(exc: Exception) -> int:
+    status_code = getattr(exc, "status_code", None)
+    return status_code if isinstance(status_code, int) else 502
+
+
+def classify_provider_error(exc: Exception) -> str:
+    status_code = provider_error_status(exc)
+    error_name = exc.__class__.__name__.lower()
+
+    if status_code == 429 or "ratelimit" in error_name:
+        return "rate_limited"
+    if status_code == 402:
+        return "billing"
+    if status_code in {401, 403} or "authentication" in error_name or "permission" in error_name:
+        return "authentication"
+    if status_code in {400, 404, 422}:
+        return "model_unavailable"
+    if status_code in {408, 504} or "timeout" in error_name:
+        return "timeout"
+    return "provider_unavailable"
+
+
 def generic_storage_error(message: str, exc: Exception) -> HTTPException:
     # AGENT4: [HARDENED] Log only exception type; never expose database/provider internals to the browser.
     logger.warning("%s: %s", message, exc.__class__.__name__)
@@ -648,6 +707,7 @@ def ai_model_info() -> dict:
     return {
         "provider": provider,
         "model": model,
+        "fallback_enabled": env_flag("ENABLE_LOCAL_REWRITE_FALLBACK", True),
         "openrouter_fallback_models": resolve_openrouter_fallback_models() if provider == "openrouter" else [],
     }
 
@@ -671,13 +731,25 @@ async def rewrite_email(payload: RewriteRequest, current_user: dict = Depends(ge
             source="provider",
         )
     except Exception as exc:
-        fallback_enabled = os.getenv("ENABLE_LOCAL_REWRITE_FALLBACK", "true").lower() == "true"
-        status_code = exc.status_code if isinstance(exc, HTTPException) else 502
-        if fallback_enabled and status_code in RETRYABLE_PROVIDER_STATUSES:
+        fallback_enabled = env_flag("ENABLE_LOCAL_REWRITE_FALLBACK", True)
+        status_code = provider_error_status(exc)
+        fallback_reason = classify_provider_error(exc)
+        if fallback_enabled:
             # AGENT4: [HARDENED] Never log prompt content, user identifiers, or auth tokens.
-            logger.warning("Primary AI provider failed. Falling back to deterministic rewrite.")
+            logger.warning(
+                "AI provider fallback provider=%s model=%s status=%s category=%s error=%s",
+                "openrouter" if should_use_openrouter() else "anthropic",
+                model_name,
+                status_code,
+                fallback_reason,
+                exc.__class__.__name__,
+            )
             fallback = local_rewrite_fallback(payload.draft, payload.mode, style_profile, payload.context)
-            return RewriteResponse(rewritten=fallback or payload.draft.strip(), source="fallback")
+            return RewriteResponse(
+                rewritten=fallback or payload.draft.strip(),
+                source="fallback",
+                fallback_reason=fallback_reason,
+            )
 
         raise HTTPException(status_code=502, detail="Rewrite service is temporarily unavailable.") from exc
 

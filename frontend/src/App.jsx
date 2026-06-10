@@ -483,6 +483,17 @@ function App() {
       setLastAiOutput(data.rewritten || "");
       setLastRewriteSource(data.source || "provider");
       setLearnMessage("");
+      if (data.source === "fallback") {
+        const fallbackMessages = {
+          rate_limited: "The AI provider is rate-limited right now. A local rewrite is shown instead.",
+          billing: "The AI provider needs billing credits. A local rewrite is shown until credits are restored.",
+          authentication: "The AI provider credentials need attention. A local rewrite is shown instead.",
+          model_unavailable: "The configured AI model is unavailable. A local rewrite is shown instead.",
+          timeout: "The AI provider took too long to respond. A local rewrite is shown instead.",
+          provider_unavailable: "The AI provider is temporarily unavailable. A local rewrite is shown instead.",
+        };
+        setError(fallbackMessages[data.fallback_reason] || fallbackMessages.provider_unavailable);
+      }
     } catch (err) {
       const message = err?.message || "Unexpected rewrite error.";
       const authLikeFailure = /authorization|auth token|logged in|401/i.test(message);

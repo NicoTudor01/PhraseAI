@@ -46,7 +46,9 @@ Frontend (`frontend/.env`):
 Backend (`backend/.env`):
 - `ANTHROPIC_API_KEY` (use your OpenRouter key here when using OpenRouter)
 - `ANTHROPIC_BASE_URL` (set to `https://openrouter.ai/api` for OpenRouter)
-- `LLM_MODEL` (optional, defaults to `claude-sonnet-4-20250514`)
+- `LLM_MODEL` (optional, defaults to `claude-sonnet-4-6`)
+- `ANTHROPIC_TIMEOUT_SECONDS` (optional, defaults to `30`)
+- `ANTHROPIC_MAX_RETRIES` (optional, defaults to `2`)
 - `LLM_MAX_TOKENS` (optional, defaults to `1200`)
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_KEY` for backwards compatibility)
