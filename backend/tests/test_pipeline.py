@@ -27,6 +27,7 @@ from app.main import (
     provider_error_status,
     resolve_model_name,
     rewrite_email,
+    submit_email_history_feedback,
     update_profile_from_feedback,
 )
 
@@ -228,6 +229,11 @@ class FakeSupabase:
         self.calls.append((name, "table", (), {}))
         return FakeTable(name, self.responses, self.calls)
 
+    # FIXER: [CHANGED] Functional feedback tests exercise the single RPC boundary instead of separate table writes.
+    def rpc(self, name, params):
+        self.calls.append((name, "rpc", (params,), {}))
+        return FakeTable(f"rpc:{name}", self.responses, self.calls)
+
 
 class PersistenceTests(unittest.TestCase):
     def test_rewrite_and_finalization_helpers_scope_by_user(self):
@@ -269,7 +275,7 @@ class PersistenceTests(unittest.TestCase):
         ]
         self.assertGreaterEqual(len(scoped_filters), 2)
 
-    def test_feedback_helper_scopes_profile_and_history_queries(self):
+    def test_feedback_helper_uses_atomic_rpc_and_returns_its_aggregate(self):
         base = update_profile_from_feedback(
             {},
             LearnRequest(
@@ -279,19 +285,34 @@ class PersistenceTests(unittest.TestCase):
                 final_version="Hello, please send the report. Thank you.",
             ),
         )
+        aggregate = {
+            "profile": base,
+            "tags": ["formal"],
+            "completeness": profile_completeness(base),
+            "last_updated": "now",
+            "history": [
+                {
+                    "id": 4,
+                    "feedback": {"style_rating": "off"},
+                    "influenced_traits": ["tone_formal_casual"],
+                }
+            ],
+            "snapshots": [],
+        }
         supabase = FakeSupabase(
             {
-                "style_profiles": [
-                    [{"profile": base}],
-                    [{"profile": base, "last_updated": "now"}],
+                "rpc:apply_style_feedback_atomic": [
+                    {
+                        "changed": True,
+                        "history_id": 4,
+                        "rating": "off",
+                        "profile": base,
+                    }
                 ],
-                "style_tags": [[], [{"tags": ["formal"], "updated_at": "now"}]],
-                "persona_snapshots": [[]],
-                "email_history": [
-                    [{"feedback": {"source": "provider"}}],
-                    [],
-                    [{"id": 4, "feedback": {}, "influenced_traits": []}],
-                ],
+                "style_profiles": [[{"profile": base, "last_updated": "now"}]],
+                "style_tags": [[{"tags": ["formal"], "updated_at": "now"}]],
+                "email_history": [aggregate["history"]],
+                "persona_snapshots": [aggregate["snapshots"]],
             }
         )
 
@@ -301,17 +322,92 @@ class PersistenceTests(unittest.TestCase):
             StyleFeedbackRequest(rating="off", history_id=4),
         )
 
-        self.assertIn("profile", data)
-        self.assertTrue(
-            all(
-                any(
-                    later[1] == "eq" and later[2] == ("user_id", "user-123")
-                    for later in supabase.calls[index + 1 :]
-                )
-                for index, call in enumerate(supabase.calls)
-                if call[1] in {"select", "update"} and call[0] in {"style_profiles", "email_history"}
-            )
+        self.assertEqual(data, aggregate)
+        self.assertEqual(
+            next(call for call in supabase.calls if call[1] == "rpc"),
+            (
+                "apply_style_feedback_atomic",
+                "rpc",
+                (
+                    {
+                        "p_user_id": "user-123",
+                        "p_history_id": 4,
+                        "p_rating": "off",
+                    },
+                ),
+                {},
+            ),
         )
+        rpc_index = next(index for index, call in enumerate(supabase.calls) if call[1] == "rpc")
+        first_table_index = next(index for index, call in enumerate(supabase.calls) if call[1] == "table")
+        self.assertLess(rpc_index, first_table_index)
+        self.assertFalse(any(call[1] in {"insert", "update", "upsert"} for call in supabase.calls))
+
+    def test_feedback_helper_rejects_feedback_without_history(self):
+        supabase = FakeSupabase()
+
+        with self.assertRaises(HTTPException) as raised:
+            apply_style_feedback(
+                supabase,
+                "user-123",
+                StyleFeedbackRequest(rating="good"),
+            )
+
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertFalse(supabase.calls)
+
+    def test_feedback_helper_maps_missing_or_non_owned_history_to_not_found(self):
+        class MissingHistoryRpc:
+            def execute(self):
+                raise RuntimeError("feedback history is missing or not owned by the caller")
+
+        class MissingHistorySupabase(FakeSupabase):
+            def rpc(self, name, params):
+                self.calls.append((name, "rpc", (params,), {}))
+                return MissingHistoryRpc()
+
+        for user_id in ("owner-with-missing-row", "non-owner"):
+            with self.subTest(user_id=user_id):
+                with self.assertRaises(HTTPException) as raised:
+                    apply_style_feedback(
+                        MissingHistorySupabase(),
+                        user_id,
+                        StyleFeedbackRequest(rating="good", history_id=404),
+                    )
+
+                self.assertEqual(raised.exception.status_code, 404)
+
+    def test_feedback_transitions_are_delegated_once_per_request(self):
+        # FIXER: [CHANGED] Repeated and changed ratings remain one atomic transition each; the RPC enforces idempotency.
+        profile = {"traits": {}}
+        supabase = FakeSupabase(
+            {
+                "rpc:apply_style_feedback_atomic": [
+                    {"changed": True, "history_id": 4, "rating": "good", "profile": profile},
+                    {"changed": False, "history_id": 4, "rating": "good", "profile": profile},
+                    {"changed": True, "history_id": 4, "rating": "off", "profile": profile},
+                ],
+                "style_profiles": [
+                    [{"profile": profile}],
+                    [{"profile": profile}],
+                    [{"profile": profile}],
+                ],
+                "style_tags": [[], [], []],
+                "email_history": [[], [], []],
+                "persona_snapshots": [[], [], []],
+            }
+        )
+
+        for rating in ("good", "good", "off"):
+            apply_style_feedback(
+                supabase,
+                "user-123",
+                StyleFeedbackRequest(rating=rating, history_id=4),
+            )
+
+        rpc_calls = [call for call in supabase.calls if call[1] == "rpc"]
+        self.assertEqual([call[2][0]["p_rating"] for call in rpc_calls], ["good", "good", "off"])
+        self.assertFalse(any(call[1] in {"insert", "update", "upsert"} for call in supabase.calls))
 
     def test_style_aggregate_returns_snapshots_and_complete_history(self):
         profile = update_profile_from_feedback(
@@ -352,6 +448,50 @@ class PersistenceTests(unittest.TestCase):
         self.assertTrue(
             any(call[0] == "persona_snapshots" and call[1] == "range" for call in supabase.calls)
         )
+
+
+class FeedbackRouteTests(unittest.IsolatedAsyncioTestCase):
+    # FIXER: [CHANGED] The resource route returns the aggregate and does not erase typed ownership failures.
+    async def test_history_feedback_route_returns_atomic_aggregate(self):
+        from unittest.mock import AsyncMock, patch
+
+        aggregate = {
+            "profile": {"traits": {}},
+            "tags": ["formal"],
+            "history": [{"id": 4, "feedback": {"style_rating": "good"}}],
+            "snapshots": [],
+        }
+        with (
+            patch("app.main.get_supabase", return_value=object()),
+            patch("app.main.run_blocking_io", new=AsyncMock(return_value=aggregate)) as run_io,
+        ):
+            response = await submit_email_history_feedback(
+                4,
+                StyleFeedbackRequest(rating="good"),
+                {"id": "user-123"},
+            )
+
+        self.assertEqual(response["history"], aggregate["history"])
+        scoped_payload = run_io.await_args.args[3]
+        self.assertEqual(scoped_payload.history_id, 4)
+        self.assertEqual(scoped_payload.rating, "good")
+
+    async def test_history_feedback_route_preserves_not_found(self):
+        from unittest.mock import AsyncMock, patch
+
+        not_found = HTTPException(status_code=404, detail="Email history entry not found.")
+        with (
+            patch("app.main.get_supabase", return_value=object()),
+            patch("app.main.run_blocking_io", new=AsyncMock(side_effect=not_found)),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                await submit_email_history_feedback(
+                    404,
+                    StyleFeedbackRequest(rating="off"),
+                    {"id": "user-123"},
+                )
+
+        self.assertEqual(raised.exception.status_code, 404)
 
 
 class RewriteRouteTests(unittest.IsolatedAsyncioTestCase):

@@ -1220,38 +1220,53 @@ def apply_style_feedback(
     user_id: str,
     payload: StyleFeedbackRequest,
 ) -> dict:
-    # AI PIPELINE: Adjust confidence and optional history feedback with explicit user scope on every query.
-    current = (
-        supabase.table("style_profiles")
-        .select("profile")
-        .eq("user_id", user_id)
-        .limit(1)
-        .execute()
-    )
-    rows = current.data or []
-    profile = (rows[0].get("profile") or {}) if rows else {}
-    adjusted = adjust_profile_from_feedback(profile, payload.rating)
-    save_profile_artifacts(supabase, user_id, adjusted)
-    if payload.history_id is not None:
-        history = (
-            supabase.table("email_history")
-            .select("feedback")
-            .eq("user_id", user_id)
-            .eq("id", payload.history_id)
-            .limit(1)
+    # FIXER: [CHANGED] One database RPC owns row authorization, trait-scoped transitions, and all feedback writes.
+    if payload.history_id is None:
+        raise HTTPException(status_code=422, detail="A history entry is required for style feedback.")
+
+    try:
+        result = (
+            supabase.rpc(
+                "apply_style_feedback_atomic",
+                {
+                    "p_user_id": user_id,
+                    "p_history_id": payload.history_id,
+                    "p_rating": payload.rating,
+                },
+            )
             .execute()
         )
-        history_rows = history.data or []
-        if history_rows:
-            feedback = dict(history_rows[0].get("feedback") or {})
-            feedback["style_rating"] = payload.rating
-            (
-                supabase.table("email_history")
-                .update({"feedback": feedback})
-                .eq("user_id", user_id)
-                .eq("id", payload.history_id)
-                .execute()
+    except Exception as exc:
+        error_text = " ".join(
+            str(value)
+            for value in (
+                exc,
+                getattr(exc, "message", ""),
+                getattr(exc, "details", ""),
+                getattr(exc, "code", ""),
             )
+        ).lower()
+        if any(
+            marker in error_text
+            for marker in (
+                "feedback_history_not_found",
+                "style_feedback_history_not_found",
+                "email history not found",
+                "feedback history is missing or not owned by the caller",
+            )
+        ):
+            raise HTTPException(status_code=404, detail="Email history entry not found.") from exc
+        raise
+
+    rpc_data = result.data
+    if isinstance(rpc_data, list):
+        rpc_data = rpc_data[0] if rpc_data else None
+    if isinstance(rpc_data, dict) and isinstance(rpc_data.get("apply_style_feedback_atomic"), dict):
+        rpc_data = rpc_data["apply_style_feedback_atomic"]
+    if not isinstance(rpc_data, dict):
+        raise RuntimeError("Style feedback RPC returned an invalid aggregate.")
+
+    # FIXER: [CHANGED] Persistence stays atomic while the API returns the complete aggregate its UI contract promises.
     return get_style_data_for_user(supabase, user_id)
 
 
@@ -1585,11 +1600,13 @@ async def submit_style_feedback(
     payload: StyleFeedbackRequest,
     current_user: dict = Depends(get_current_user),
 ) -> dict:
-    # AI PIPELINE: Reinforce or discount the authenticated user's profile and return refreshed aggregate data.
+    # FIXER: [CHANGED] The compatibility route requires a history row and returns the refreshed API aggregate.
     user_id = current_user["id"]
     try:
         data = await run_blocking_io(apply_style_feedback, get_supabase(), user_id, payload)
         return {"status": "ok", "user_id": user_id, **data}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise generic_storage_error("Could not save style feedback.", exc) from exc
 
@@ -1600,12 +1617,14 @@ async def submit_email_history_feedback(
     payload: StyleFeedbackRequest,
     current_user: dict = Depends(get_current_user),
 ) -> dict:
-    # AI PIPELINE: The resource route binds feedback to one authenticated history row.
+    # FIXER: [CHANGED] Bind the authenticated resource route to the atomic transition and preserve typed failures.
     user_id = current_user["id"]
     scoped_payload = StyleFeedbackRequest(rating=payload.rating, history_id=history_id)
     try:
         data = await run_blocking_io(apply_style_feedback, get_supabase(), user_id, scoped_payload)
         return {"status": "ok", "user_id": user_id, **data}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise generic_storage_error("Could not save style feedback.", exc) from exc
 

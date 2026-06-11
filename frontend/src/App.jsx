@@ -435,8 +435,12 @@ function App() {
   const [styleDataLoading, setStyleDataLoading] = useState(false);
   const [styleDataError, setStyleDataError] = useState("");
   const [selectedSnapshotId, setSelectedSnapshotId] = useState("");
-  const [feedbackBusyId, setFeedbackBusyId] = useState("");
-  const [feedbackMessage, setFeedbackMessage] = useState("");
+  // FIXER: [CHANGED] Feedback state is row-specific so independent history entries can update concurrently.
+  const [feedbackBusyIds, setFeedbackBusyIds] = useState({});
+  const [feedbackMessages, setFeedbackMessages] = useState({});
+  const feedbackPendingRef = useRef(new Map());
+  // FIXER: [CHANGED] Session generations prevent stale feedback responses from crossing logout/login boundaries.
+  const authGenerationRef = useRef(0);
   const [copyStatus, setCopyStatus] = useState("Copy");
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -533,6 +537,11 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // FIXER: [CHANGED] Every auth transition invalidates pending feedback and clears row-local UI state.
+    authGenerationRef.current += 1;
+    feedbackPendingRef.current.clear();
+    setFeedbackBusyIds({});
+    setFeedbackMessages({});
     if (!session?.access_token) {
       setStyleData(normalizeStyleData());
       setStyleDataError("");
@@ -815,31 +824,86 @@ function App() {
     window.setTimeout(() => setCopyStatus("Copy"), 1200);
   }
 
-  // FRONTEND: Feedback is persisted by the backend, then the aggregate is reloaded to show learned changes.
+  // FIXER: [CHANGED] Optimistically rate one row, consume the returned aggregate, and roll back only that row on failure.
   async function handleHistoryFeedback(entryId, rating) {
-    if (!entryId || feedbackBusyId) return;
-    setFeedbackBusyId(String(entryId));
-    setFeedbackMessage("");
+    if (!entryId) return;
+    const rowId = String(entryId);
+    if (feedbackPendingRef.current.has(rowId)) return;
+    const requestGeneration = authGenerationRef.current;
+
+    const previousEntry = styleData.emailHistory.find((entry, index) => String(entry.id ?? index) === rowId);
+    const previousFeedback = previousEntry?.feedback;
+    feedbackPendingRef.current.set(rowId, rating);
+    setFeedbackBusyIds((current) => ({ ...current, [rowId]: true }));
+    setFeedbackMessages((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+    setStyleData((current) => ({
+      ...current,
+      emailHistory: current.emailHistory.map((entry, index) =>
+        String(entry.id ?? index) === rowId
+          ? {
+              ...entry,
+              feedback: {
+                ...(typeof entry.feedback === "object" && entry.feedback ? entry.feedback : {}),
+                style_rating: rating,
+              },
+            }
+          : entry),
+    }));
+
     try {
-      try {
-        await apiFetch(`/email-history/${encodeURIComponent(entryId)}/feedback`, {
-          method: "POST",
-          body: JSON.stringify({ rating }),
-        });
-      } catch (err) {
-        // FRONTEND: Temporary compatibility for deployments still exposing the aggregate feedback route.
-        if (err?.status !== 404) throw err;
-        await apiFetch("/style-feedback", {
-          method: "POST",
-          body: JSON.stringify({ rating, history_id: Number(entryId) }),
-        });
-      }
-      await loadStyleData({ quiet: true });
-      setFeedbackMessage(rating === "good" ? "Saved as a good match." : "Saved. PhraseAI will adjust.");
+      const response = await apiFetch(`/email-history/${encodeURIComponent(entryId)}/feedback`, {
+        method: "POST",
+        body: JSON.stringify({ rating }),
+      });
+      // FIXER: [CHANGED] Ignore responses belonging to a session that has since ended or changed.
+      if (authGenerationRef.current !== requestGeneration) return;
+      feedbackPendingRef.current.delete(rowId);
+      const aggregate = normalizeStyleData(response);
+      aggregate.emailHistory = aggregate.emailHistory.map((entry, index) => {
+        const pendingRating = feedbackPendingRef.current.get(String(entry.id ?? index));
+        return pendingRating
+          ? {
+              ...entry,
+              feedback: {
+                ...(typeof entry.feedback === "object" && entry.feedback ? entry.feedback : {}),
+                style_rating: pendingRating,
+              },
+            }
+          : entry;
+      });
+      setStyleData(aggregate);
+      setFeedbackMessages((current) => ({
+        ...current,
+        [rowId]: {
+          type: "success",
+          text: rating === "good" ? "Saved as a good match." : "Saved. PhraseAI will adjust.",
+        },
+      }));
     } catch (err) {
-      setFeedbackMessage(err.message || "Could not save feedback.");
+      if (authGenerationRef.current !== requestGeneration) return;
+      feedbackPendingRef.current.delete(rowId);
+      setStyleData((current) => ({
+        ...current,
+        emailHistory: current.emailHistory.map((entry, index) =>
+          String(entry.id ?? index) === rowId
+            ? { ...entry, feedback: previousFeedback }
+            : entry),
+      }));
+      setFeedbackMessages((current) => ({
+        ...current,
+        [rowId]: { type: "error", text: err.message || "Could not save feedback." },
+      }));
     } finally {
-      setFeedbackBusyId("");
+      if (authGenerationRef.current !== requestGeneration) return;
+      setFeedbackBusyIds((current) => {
+        const next = { ...current };
+        delete next[rowId];
+        return next;
+      });
     }
   }
 
@@ -1410,7 +1474,9 @@ function App() {
               const feedback = typeof entry.feedback === "string"
                 ? entry.feedback
                 : entry.feedback?.rating || entry.feedback?.style_rating || "";
-              const busy = feedbackBusyId === String(id);
+              const rowId = String(id);
+              const busy = Boolean(feedbackBusyIds[rowId]);
+              const feedbackMessage = feedbackMessages[rowId];
 
               return (
                 <article className="email-history-item" key={id}>
@@ -1458,12 +1524,20 @@ function App() {
                       </button>
                     </div>
                   </div>
+                  {feedbackMessage ? (
+                    <p
+                      className="history-feedback-message"
+                      role={feedbackMessage.type === "error" ? "alert" : "status"}
+                      style={feedbackMessage.type === "error" ? { color: "#f08b78" } : undefined}
+                    >
+                      {feedbackMessage.text}
+                    </p>
+                  ) : null}
                 </article>
               );
             })}
           </div>
         )}
-        {feedbackMessage ? <p className="history-feedback-message" aria-live="polite">{feedbackMessage}</p> : null}
       </section>
     );
   }
