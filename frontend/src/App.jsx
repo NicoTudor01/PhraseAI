@@ -792,6 +792,8 @@ function App() {
       await loadStyleData({ quiet: true });
       setLearnMessage("Saved. Future rewrites will adapt to your style.");
     } catch (err) {
+      // TRACER: [REAL ERROR HIDDEN HERE]
+      console.error("Learning update request failed", err);
       setLearnMessage(err.message || "Could not save learning signal.");
     } finally {
       setLearning(false);
@@ -893,6 +895,8 @@ function App() {
             ? { ...entry, feedback: previousFeedback }
             : entry),
       }));
+      // TRACER: [REAL ERROR HIDDEN HERE]
+      console.error("Style feedback request failed", err);
       setFeedbackMessages((current) => ({
         ...current,
         [rowId]: { type: "error", text: err.message || "Could not save feedback." },

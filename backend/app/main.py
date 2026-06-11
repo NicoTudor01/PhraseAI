@@ -1547,6 +1547,8 @@ async def learn_from_user_edit(payload: LearnRequest, current_user: dict = Depen
             "history_id": history_id,
         }
     except Exception as exc:
+        # TRACER: [REAL ERROR HIDDEN HERE]
+        logger.exception("Learning update storage failure: %r", exc)
         raise generic_storage_error("Could not save this learning update.", exc) from exc
 
 
@@ -1608,6 +1610,8 @@ async def submit_style_feedback(
     except HTTPException:
         raise
     except Exception as exc:
+        # TRACER: [REAL ERROR HIDDEN HERE]
+        logger.exception("Style feedback storage failure: %r", exc)
         raise generic_storage_error("Could not save style feedback.", exc) from exc
 
 
@@ -1626,6 +1630,8 @@ async def submit_email_history_feedback(
     except HTTPException:
         raise
     except Exception as exc:
+        # TRACER: [REAL ERROR HIDDEN HERE]
+        logger.exception("Email history feedback storage failure: %r", exc)
         raise generic_storage_error("Could not save style feedback.", exc) from exc
 
 

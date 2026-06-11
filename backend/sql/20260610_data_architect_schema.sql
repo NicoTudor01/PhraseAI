@@ -281,8 +281,8 @@ begin
 end;
 $$;
 
--- DATA ARCHITECT: Maintain modification and finalization timestamps without relying on application callers.
-create or replace function public.set_data_architect_updated_at()
+-- FIXER: [CHANGED] Keep email-history finalization fields out of triggers used by other row types.
+create or replace function public.set_email_history_updated_at()
 returns trigger
 language plpgsql
 security invoker
@@ -290,8 +290,7 @@ set search_path = public
 as $$
 begin
   new.updated_at = now();
-  if tg_table_name = 'email_history'
-     and new.final_version is not null
+  if new.final_version is not null
      and new.finalized_at is null then
     new.finalized_at = now();
   end if;
@@ -299,15 +298,31 @@ begin
 end;
 $$;
 
+-- FIXER: [CHANGED] The style-tags trigger references only columns present on style_tags.
+create or replace function public.set_style_tags_updated_at()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
 drop trigger if exists email_history_set_updated_at on public.email_history;
 create trigger email_history_set_updated_at
 before insert or update on public.email_history
-for each row execute function public.set_data_architect_updated_at();
+for each row execute function public.set_email_history_updated_at();
 
 drop trigger if exists style_tags_set_updated_at on public.style_tags;
 create trigger style_tags_set_updated_at
 before insert or update on public.style_tags
-for each row execute function public.set_data_architect_updated_at();
+for each row execute function public.set_style_tags_updated_at();
+
+-- FIXER: [CHANGED] Remove the formerly shared function after all dependent triggers are replaced.
+drop function if exists public.set_data_architect_updated_at();
 
 -- DATA ARCHITECT: Add indexes for per-user timelines, completeness queries, and array containment searches.
 create index if not exists email_history_user_submitted_idx
