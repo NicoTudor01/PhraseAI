@@ -97,6 +97,14 @@ const AUTH_BUTTON_TAP = {
   boxShadow: "0 5px 14px rgba(23, 25, 34, 0.14)",
   transition: { duration: 0.16, ease: AUTH_EASE_OUT },
 };
+const AUTH_DETAILS_SEQUENCE = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.12 } },
+};
+const AUTH_DETAILS_ITEM = {
+  hidden: { opacity: 0, y: 26 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.58, ease: AUTH_EASE_OUT } },
+};
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   // FIXED: session persistence
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
@@ -1400,6 +1408,102 @@ function App() {
             </p>
           </motion.section>
         </main>
+
+        <section className="auth-details" aria-labelledby="auth-details-title">
+          <motion.div
+            className="auth-details-inner"
+            variants={AUTH_DETAILS_SEQUENCE}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.12 }}
+          >
+            <motion.header className="auth-details-heading" variants={AUTH_DETAILS_ITEM}>
+              <span className="eyebrow">WRITING THAT SOUNDS LIKE YOU</span>
+              <h2 id="auth-details-title">Your thoughts, with the clarity they deserve.</h2>
+              <p>
+                PhraseAI helps you communicate with confidence without replacing your personality.
+                It refines the message, learns from your choices, and keeps your voice at the center.
+              </p>
+            </motion.header>
+
+            <motion.div className="auth-purpose-grid" variants={AUTH_DETAILS_SEQUENCE}>
+              <motion.article className="auth-purpose-card auth-purpose-card-featured" variants={AUTH_DETAILS_ITEM}>
+                <span className="auth-card-number">01</span>
+                <div className="auth-card-icon"><SparkleIcon /></div>
+                <h3>More than a rewrite</h3>
+                <p>
+                  Improve clarity, tone, and structure while preserving the meaning and personality behind every sentence.
+                </p>
+              </motion.article>
+              <motion.article className="auth-purpose-card" variants={AUTH_DETAILS_ITEM}>
+                <span className="auth-card-number">02</span>
+                <div className="auth-card-icon"><ProfileIcon /></div>
+                <h3>A style that evolves</h3>
+                <p>
+                  Each approved rewrite sharpens a private style profile built around your vocabulary, rhythm, and preferences.
+                </p>
+              </motion.article>
+              <motion.article className="auth-purpose-card" variants={AUTH_DETAILS_ITEM}>
+                <span className="auth-card-number">03</span>
+                <div className="auth-card-icon"><CheckIcon /></div>
+                <h3>Useful from day one</h3>
+                <p>
+                  Start with any rough email and get a polished version immediately. Your results become more personal over time.
+                </p>
+              </motion.article>
+            </motion.div>
+
+            <motion.div className="auth-how" variants={AUTH_DETAILS_ITEM}>
+              <div className="auth-how-copy">
+                <span className="eyebrow">HOW IT WORKS</span>
+                <h2>From rough draft to ready to send.</h2>
+                <p>No complicated setup. Just a simple learning loop that gets stronger whenever you use it.</p>
+              </div>
+              <ol className="auth-how-steps">
+                <li>
+                  <span>1</span>
+                  <div><strong>Write naturally</strong><p>Paste a draft exactly as it comes to mind.</p></div>
+                </li>
+                <li>
+                  <span>2</span>
+                  <div><strong>Choose your goal</strong><p>Make it professional, sharper, or simply correct.</p></div>
+                </li>
+                <li>
+                  <span>3</span>
+                  <div><strong>Teach through choice</strong><p>Edit, approve, and help PhraseAI understand what sounds right.</p></div>
+                </li>
+              </ol>
+            </motion.div>
+
+            <motion.div className="auth-difference" variants={AUTH_DETAILS_ITEM}>
+              <div>
+                <span className="eyebrow">WHY PHRASEAI</span>
+                <h2>AI should amplify your voice, not flatten it.</h2>
+              </div>
+              <div className="auth-difference-points">
+                <p><CheckIcon /><span><strong>Personal by design.</strong> Your style profile belongs to your account and grows with you.</span></p>
+                <p><CheckIcon /><span><strong>Intent stays intact.</strong> The point of your message never gets lost in the polish.</span></p>
+                <p><CheckIcon /><span><strong>You stay in control.</strong> Every result is editable, reviewable, and yours to approve.</span></p>
+              </div>
+            </motion.div>
+
+            <motion.div className="auth-details-cta" variants={AUTH_DETAILS_ITEM}>
+              <div>
+                <span className="eyebrow">YOUR VOICE IS THE PRODUCT</span>
+                <h2>Write with less friction and more confidence.</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signup");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                Start building your style <ArrowIcon />
+              </button>
+            </motion.div>
+          </motion.div>
+        </section>
       </div>
     );
   }
