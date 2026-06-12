@@ -13,12 +13,13 @@ const IS_DEV = import.meta.env.DEV;
 const LOGIN_RATE_LIMIT_MAX = 5;
 const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const API_TIMEOUT_MS = 65000;
-// ANIMATION: Shared curves and timings keep the auth choreography intentional and consistent.
+// SCROLL-ANIM: Shared curves and timings keep the login choreography native to the existing UI.
 const AUTH_EASE_OUT = [0.16, 1, 0.3, 1];
 const AUTH_EASE_IN_OUT = [0.65, 0, 0.35, 1];
 const AUTH_SCROLL_INPUT = [0, 300];
-const AUTH_BACKGROUND_SCROLL_OUTPUT = [0, -120];
-const AUTH_CARDS_SCROLL_OUTPUT = [0, -180];
+// SCROLL-ANIM: Normal flow moves at 1x; these transforms offset it to net 0.4x and 0.6x speeds.
+const AUTH_BACKGROUND_SCROLL_OUTPUT = [0, 180];
+const AUTH_CARDS_SCROLL_OUTPUT = [0, -60];
 const AUTH_SUCCESS_REDIRECT_MS = 980;
 const AUTH_ERROR_DISMISS_MS = 4000;
 const AUTH_BACKGROUND_MOTION = {
@@ -71,7 +72,7 @@ const AUTH_STATE_SWAP = {
   initial: { opacity: 0, y: 4 },
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -4 },
-  transition: { duration: 0.15, ease: AUTH_EASE_OUT },
+  transition: { duration: 0.18, ease: AUTH_EASE_OUT },
 };
 const AUTH_CHECK_MOTION = {
   initial: { pathLength: 0, opacity: 0 },
@@ -94,7 +95,7 @@ const AUTH_BUTTON_HOVER = {
 const AUTH_BUTTON_TAP = {
   y: 0,
   boxShadow: "0 5px 14px rgba(23, 25, 34, 0.14)",
-  transition: { duration: 0.1, ease: AUTH_EASE_OUT },
+  transition: { duration: 0.16, ease: AUTH_EASE_OUT },
 };
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   // FIXED: session persistence
@@ -517,7 +518,7 @@ function PersonaMap({ initials, traits }) {
 
 function App() {
   const authErrorTimerRef = useRef(null);
-  // ANIMATION: Mobile transforms create layered depth using compositor-friendly translateY only.
+  // SCROLL-ANIM: Transform-only offsets produce true 0.4x background and 0.6x card parallax.
   const { scrollY: authScrollY } = useScroll();
   const authBackgroundY = useTransform(authScrollY, AUTH_SCROLL_INPUT, AUTH_BACKGROUND_SCROLL_OUTPUT);
   const authCardsY = useTransform(authScrollY, AUTH_SCROLL_INPUT, AUTH_CARDS_SCROLL_OUTPUT);
@@ -632,7 +633,7 @@ function App() {
             // FIXED: session persistence
             // REDESIGN: [CHANGED] Show success feedback before revealing the protected application.
             setAuthSucceeded(true);
-            // ANIMATION: Allow the checkmark and form exit to finish before revealing the app.
+            // SCROLL-ANIM: Allow the checkmark and form exit to finish before revealing the app.
             window.setTimeout(() => setSession(nextSession), AUTH_SUCCESS_REDIRECT_MS);
             return;
           }
@@ -1092,7 +1093,7 @@ function App() {
     setter(value);
     if (!authError) return;
     window.clearTimeout(authErrorTimerRef.current);
-    // ANIMATION: Once the user resumes typing, stale feedback leaves gently after a short recovery window.
+    // SCROLL-ANIM: Once the user resumes typing, stale feedback leaves gently after a short recovery window.
     authErrorTimerRef.current = window.setTimeout(() => setAuthError(""), AUTH_ERROR_DISMISS_MS);
   }
 
@@ -1196,7 +1197,7 @@ function App() {
             style={{ y: authBackgroundY }}
             {...AUTH_BACKGROUND_MOTION}
           >
-            {/* ANIMATION: Left-panel children enter in a deliberate headline-to-product sequence. */}
+            {/* SCROLL-ANIM: Left-panel children enter in a deliberate headline-to-product sequence. */}
             <motion.div className="auth-copy" variants={AUTH_LEFT_SEQUENCE} initial="hidden" animate="visible">
               <motion.span className="eyebrow" variants={AUTH_LEFT_ITEM}>YOUR VOICE, REFINED</motion.span>
               <motion.h1 variants={AUTH_LEFT_ITEM}>Write like yourself. Only better.</motion.h1>
@@ -1210,7 +1211,7 @@ function App() {
               </motion.div>
             </motion.div>
 
-            {/* ANIMATION: The card layer enters after the copy and parallax-scrolls independently on mobile. */}
+            {/* SCROLL-ANIM: Cards enter after the copy and retain their own 0.6x parallax layer. */}
             <motion.div className="auth-floating-cards" aria-hidden="true" style={{ y: authCardsY }}>
               <motion.div
                 className="auth-floating-cards-entrance"
@@ -1253,7 +1254,7 @@ function App() {
             </div>
           </motion.section>
 
-          {/* ANIMATION: The form panel arrives from the right after the atmospheric background begins. */}
+          {/* SCROLL-ANIM: The form panel arrives from the right and remains the natural 1x scroll anchor. */}
           <motion.section className="auth-form-wrap" {...AUTH_PANEL_MOTION}>
             <motion.form
               className="auth-form"
@@ -1330,7 +1331,7 @@ function App() {
                 </div>
               </motion.div>
 
-              {/* ANIMATION: Button states crossfade, press physically, and draw the success mark before redirect. */}
+              {/* SCROLL-ANIM: Button states crossfade, press physically, and draw the success mark before redirect. */}
               <motion.button
                 type="submit"
                 className="primary-button auth-submit"

@@ -184,7 +184,7 @@ a:focus-visible {
   background: #080a12;
 }
 
-/* ANIMATION: The left panel's atmospheric layer fades in through Framer Motion while its gradient breathes off-thread. */
+/* SCROLL-ANIM: The atmospheric layer fades through Framer Motion while its existing palette breathes off-thread. */
 .auth-topbar {
   position: absolute;
   z-index: 10;
@@ -250,7 +250,7 @@ a:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(480px, 0.92fr);
   width: 100%;
-  min-height: 100dvh;
+  min-height: calc(100dvh + 300px);
   margin: 0 auto;
 }
 
@@ -259,7 +259,7 @@ a:focus-visible {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   overflow: hidden;
   padding: 132px clamp(46px, 7vw, 116px) 64px;
   background:
@@ -268,6 +268,7 @@ a:focus-visible {
     linear-gradient(135deg, #0a0f1e, #1a0a2e 50%, #050810);
   background-size: 140% 140%;
   animation: authGradientShift 8s ease-in-out infinite alternate;
+  will-change: transform;
 }
 
 .auth-story::before,
@@ -492,7 +493,7 @@ a:focus-visible {
   left: 0;
   opacity: 0.78;
   transform: rotate(2deg);
-  /* ANIMATION: Independent float timing keeps the preview cards organic rather than synchronized. */
+  /* SCROLL-ANIM: Independent float timing keeps the preview cards organic rather than synchronized. */
   animation: rewriteCardFloatOne 4s ease-in-out infinite;
 }
 
@@ -500,7 +501,7 @@ a:focus-visible {
   top: 46px;
   left: min(25%, 145px);
   width: 286px;
-  /* ANIMATION: Card two uses a slower, delayed drift and softer shadow pulse. */
+  /* SCROLL-ANIM: Card two uses a slower, delayed drift and softer shadow pulse. */
   animation: rewriteCardFloatTwo 5.5s ease-in-out 1s infinite;
 }
 
@@ -508,7 +509,7 @@ a:focus-visible {
   top: 125px;
   right: 0;
   width: 205px;
-  /* ANIMATION: Card three completes the asynchronous ambient card motion. */
+  /* SCROLL-ANIM: Card three completes the asynchronous ambient card motion. */
   animation: rewriteCardFloatThree 4.8s ease-in-out 2s infinite;
 }
 
@@ -522,6 +523,7 @@ a:focus-visible {
   padding: 110px clamp(38px, 6vw, 90px) 54px;
   color: #171922;
   background: #f7f7f4;
+  align-content: start;
 }
 
 .auth-form {
@@ -696,8 +698,8 @@ a:focus-visible {
 .auth-submit .button-spinner {
   border-color: rgba(255, 255, 255, 0.28);
   border-top-color: #ffffff;
-  /* ANIMATION: The loading rotation eases through each cycle instead of reading as mechanical. */
-  animation-timing-function: ease-in-out;
+  /* SCROLL-ANIM: The loading rotation stays on the CSS thread with a non-linear curve. */
+  animation: spin 700ms ease-in-out infinite;
 }
 
 .auth-switch {
@@ -2109,7 +2111,7 @@ a:focus-visible {
   }
 }
 
-/* ANIMATION: Infinite background and card loops stay in CSS to avoid JS-thread work. */
+/* SCROLL-ANIM: Infinite gradient, glow, and card loops stay in CSS to avoid JS-thread work. */
 @keyframes authGradientShift {
   from {
     background-position: 0% 30%;
@@ -2220,7 +2222,7 @@ a:focus-visible {
     position: relative;
     display: grid;
     grid-template-columns: 1fr;
-    min-height: 100dvh;
+    min-height: calc(100dvh + 160px);
     padding: 86px 16px 56px;
   }
 
@@ -2236,7 +2238,7 @@ a:focus-visible {
     display: none;
   }
 
-  /* ANIMATION: Mobile cards remain a low-contrast depth layer for transform-only parallax. */
+  /* SCROLL-ANIM: Mobile cards remain a low-contrast transform-only parallax layer. */
   .auth-floating-cards {
     position: absolute;
     top: 18%;
@@ -2246,6 +2248,7 @@ a:focus-visible {
     opacity: 0.18;
     transform: scale(0.82);
     transform-origin: center;
+    will-change: transform;
   }
 
   .auth-form-wrap {
