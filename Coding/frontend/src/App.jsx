@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useScroll, useSpring, useTransform } from "framer-motion";
 import { validateRewriteResponse } from "./rewriteResponse";
 
 // ARCHITECT: [RECOMMENDED PATTERN] Production uses the same-origin Vercel proxy, avoiding CORS as a rewrite dependency.
@@ -20,6 +20,12 @@ const AUTH_SCROLL_INPUT = [0, 300];
 // SCROLL-ANIM: Normal flow moves at 1x; these transforms offset it to net 0.4x and 0.6x speeds.
 const AUTH_BACKGROUND_SCROLL_OUTPUT = [0, 180];
 const AUTH_CARDS_SCROLL_OUTPUT = [0, -60];
+const AUTH_SCROLL_SPRING = { stiffness: 86, damping: 24, mass: 0.72, restDelta: 0.001 };
+const AUTH_PULL_SCROLL_INPUT = [0, 760];
+const AUTH_HERO_SCALE_OUTPUT = [1, 0.975];
+const AUTH_HERO_OPACITY_OUTPUT = [1, 0.72];
+const AUTH_DETAILS_PULL_OUTPUT = [72, 0];
+const AUTH_DETAILS_SCALE_OUTPUT = [0.985, 1];
 const AUTH_SUCCESS_REDIRECT_MS = 980;
 const AUTH_ERROR_DISMISS_MS = 4000;
 const AUTH_BACKGROUND_MOTION = {
@@ -526,10 +532,16 @@ function PersonaMap({ initials, traits }) {
 
 function App() {
   const authErrorTimerRef = useRef(null);
-  // SCROLL-ANIM: Transform-only offsets produce true 0.4x background and 0.6x card parallax.
+  // SCROLL-ANIM: A damped scroll signal keeps trackpad and wheel movement fluid without delaying intent.
   const { scrollY: authScrollY } = useScroll();
-  const authBackgroundY = useTransform(authScrollY, AUTH_SCROLL_INPUT, AUTH_BACKGROUND_SCROLL_OUTPUT);
-  const authCardsY = useTransform(authScrollY, AUTH_SCROLL_INPUT, AUTH_CARDS_SCROLL_OUTPUT);
+  const smoothAuthScrollY = useSpring(authScrollY, AUTH_SCROLL_SPRING);
+  const authBackgroundY = useTransform(smoothAuthScrollY, AUTH_SCROLL_INPUT, AUTH_BACKGROUND_SCROLL_OUTPUT);
+  const authCardsY = useTransform(smoothAuthScrollY, AUTH_SCROLL_INPUT, AUTH_CARDS_SCROLL_OUTPUT);
+  // SCROLL-ANIM: The full hero yields while the details surface rises, creating one continuous pulling gesture.
+  const authHeroScale = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_HERO_SCALE_OUTPUT);
+  const authHeroOpacity = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_HERO_OPACITY_OUTPUT);
+  const authDetailsY = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_PULL_OUTPUT);
+  const authDetailsScale = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_SCALE_OUTPUT);
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
   const [showContext, setShowContext] = useState(false);
@@ -1199,7 +1211,10 @@ function App() {
         </header>
 
         {/* REDESIGN: [CHANGED] Premium split-screen auth experience with product storytelling and live rewrite examples. */}
-        <main className="auth-layout">
+        <motion.main
+          className="auth-layout"
+          style={{ scale: authHeroScale, opacity: authHeroOpacity }}
+        >
           <motion.section
             className="auth-story"
             style={{ y: authBackgroundY }}
@@ -1407,9 +1422,13 @@ function App() {
               <a href="mailto:support@phraseai.app">Contact support</a>.
             </p>
           </motion.section>
-        </main>
+        </motion.main>
 
-        <section className="auth-details" aria-labelledby="auth-details-title">
+        <motion.section
+          className="auth-details"
+          aria-labelledby="auth-details-title"
+          style={{ y: authDetailsY, scale: authDetailsScale }}
+        >
           <motion.div
             className="auth-details-inner"
             variants={AUTH_DETAILS_SEQUENCE}
@@ -1503,7 +1522,7 @@ function App() {
               </button>
             </motion.div>
           </motion.div>
-        </section>
+        </motion.section>
       </div>
     );
   }

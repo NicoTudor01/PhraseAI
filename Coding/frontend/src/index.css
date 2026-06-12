@@ -179,7 +179,7 @@ a:focus-visible {
 .auth-page {
   position: relative;
   min-height: 100dvh;
-  overflow-x: hidden;
+  overflow-x: clip;
   color: #f8fafc;
   background: #080a12;
 }
@@ -247,11 +247,16 @@ a:focus-visible {
 }
 
 .auth-layout {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(480px, 0.92fr);
   width: 100%;
   min-height: calc(100dvh + 300px);
   margin: 0 auto;
+  overflow: hidden;
+  transform-origin: 50% 16%;
+  will-change: transform, opacity;
 }
 
 .auth-story {
@@ -767,12 +772,17 @@ a:focus-visible {
 .auth-details {
   position: relative;
   z-index: 6;
+  margin-top: -72px;
   padding: 112px clamp(28px, 6vw, 92px) 84px;
   color: #f8fafc;
   background:
     radial-gradient(circle at 84% 16%, rgba(103, 217, 163, 0.1), transparent 24%),
     #080a12;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 32px 32px 0 0;
+  box-shadow: 0 -28px 80px rgba(0, 0, 0, 0.24);
+  transform-origin: 50% 0;
+  will-change: transform;
 }
 
 .auth-details-inner {
@@ -2465,7 +2475,7 @@ a:focus-visible {
 @media (max-width: 760px) {
   /* REDESIGN: [CHANGED] The animated visual becomes a background layer behind the mobile form. */
   .auth-page {
-    overflow: auto;
+    overflow-x: clip;
   }
 
   .auth-topbar {
@@ -2529,7 +2539,9 @@ a:focus-visible {
   }
 
   .auth-details {
+    margin-top: -46px;
     padding: 82px 20px 60px;
+    border-radius: 24px 24px 0 0;
   }
 
   .auth-details-heading {
