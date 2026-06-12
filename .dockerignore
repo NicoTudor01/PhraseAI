@@ -5,5 +5,10 @@ node_modules
 backend/.venv
 backend/__pycache__
 backend/.pytest_cache
+Coding/frontend/node_modules
+Coding/frontend/dist
+Coding/backend/.venv
+Coding/backend/__pycache__
+Coding/backend/.pytest_cache
 .env
 **/.env

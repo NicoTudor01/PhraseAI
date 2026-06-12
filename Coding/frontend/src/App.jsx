@@ -1,20 +1,105 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
 import { validateRewriteResponse } from "./rewriteResponse";
 
 // ARCHITECT: [RECOMMENDED PATTERN] Production uses the same-origin Vercel proxy, avoiding CORS as a rewrite dependency.
 const API_URL = import.meta.env.DEV ? import.meta.env.VITE_API_URL || "/api" : "/api";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-// AGENT3: [CHANGE] Preserve Supabase sessions by default; forced sign-out is reserved for explicit test deployments.
-const FORCE_LOGIN_ON_VISIT = (import.meta.env.VITE_FORCE_LOGIN_ON_VISIT || "false").toLowerCase() === "true";
 const MAX_DRAFT_CHARS = 12000;
 const MAX_CONTEXT_CHARS = 8000;
 const IS_DEV = import.meta.env.DEV;
 const LOGIN_RATE_LIMIT_MAX = 5;
 const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const API_TIMEOUT_MS = 65000;
-const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+// ANIMATION: Shared curves and timings keep the auth choreography intentional and consistent.
+const AUTH_EASE_OUT = [0.16, 1, 0.3, 1];
+const AUTH_EASE_IN_OUT = [0.65, 0, 0.35, 1];
+const AUTH_SCROLL_INPUT = [0, 300];
+const AUTH_BACKGROUND_SCROLL_OUTPUT = [0, -120];
+const AUTH_CARDS_SCROLL_OUTPUT = [0, -180];
+const AUTH_SUCCESS_REDIRECT_MS = 980;
+const AUTH_ERROR_DISMISS_MS = 4000;
+const AUTH_BACKGROUND_MOTION = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  transition: { duration: 0.8, ease: AUTH_EASE_OUT },
+};
+const AUTH_LEFT_SEQUENCE = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.15, delayChildren: 0.18 } },
+};
+const AUTH_LEFT_ITEM = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: AUTH_EASE_OUT } },
+};
+const AUTH_PANEL_MOTION = {
+  initial: { opacity: 0, x: 40 },
+  animate: { opacity: 1, x: 0 },
+  transition: { duration: 0.6, delay: 0.2, ease: AUTH_EASE_OUT },
+};
+const AUTH_FORM_SEQUENCE = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1, delayChildren: 0.78 } },
+};
+const AUTH_FORM_ITEM = {
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: AUTH_EASE_OUT } },
+};
+const AUTH_BUTTON_ITEM = {
+  hidden: { opacity: 0, y: 12, scale: 0.97 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: AUTH_EASE_OUT } },
+};
+const AUTH_FORM_REST = { x: 0, opacity: 1, y: 0 };
+const AUTH_ERROR_SHAKE = {
+  x: [0, -6, 6, -4, 4, 0],
+  transition: { duration: 0.4, ease: AUTH_EASE_IN_OUT },
+};
+const AUTH_ERROR_MOTION = {
+  initial: { opacity: 0, y: -8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -5 },
+  transition: { duration: 0.3, ease: AUTH_EASE_OUT },
+};
+const AUTH_SUCCESS_EXIT = {
+  opacity: 0,
+  y: -10,
+  transition: { duration: 0.5, delay: 0.45, ease: AUTH_EASE_IN_OUT },
+};
+const AUTH_STATE_SWAP = {
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -4 },
+  transition: { duration: 0.15, ease: AUTH_EASE_OUT },
+};
+const AUTH_CHECK_MOTION = {
+  initial: { pathLength: 0, opacity: 0 },
+  animate: { pathLength: 1, opacity: 1 },
+  transition: { duration: 0.4, ease: AUTH_EASE_OUT },
+};
+const AUTH_CARDS_ENTRANCE = {
+  hidden: { opacity: 0, y: 30 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.7, delay: 0.72, ease: AUTH_EASE_OUT },
+  },
+};
+const AUTH_BUTTON_HOVER = {
+  y: -2,
+  boxShadow: "0 14px 30px rgba(23, 25, 34, 0.26)",
+  transition: { duration: 0.2, ease: AUTH_EASE_OUT },
+};
+const AUTH_BUTTON_TAP = {
+  y: 0,
+  boxShadow: "0 5px 14px rgba(23, 25, 34, 0.14)",
+  transition: { duration: 0.1, ease: AUTH_EASE_OUT },
+};
+const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  // FIXED: session persistence
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+}) : null;
 
 class ApiRequestError extends Error {
   constructor(message, { status = 0, stage = "unknown", requestId = "" } = {}) {
@@ -159,6 +244,21 @@ function CheckIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m5 12 4 4L19 6" />
+    </svg>
+  );
+}
+
+function AnimatedCheckIcon() {
+  return (
+    <svg className="auth-success-check" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <motion.path
+        d="m5 12 4 4L19 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...AUTH_CHECK_MOTION}
+      />
     </svg>
   );
 }
@@ -416,6 +516,11 @@ function PersonaMap({ initials, traits }) {
 }
 
 function App() {
+  const authErrorTimerRef = useRef(null);
+  // ANIMATION: Mobile transforms create layered depth using compositor-friendly translateY only.
+  const { scrollY: authScrollY } = useScroll();
+  const authBackgroundY = useTransform(authScrollY, AUTH_SCROLL_INPUT, AUTH_BACKGROUND_SCROLL_OUTPUT);
+  const authCardsY = useTransform(authScrollY, AUTH_SCROLL_INPUT, AUTH_CARDS_SCROLL_OUTPUT);
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
   const [showContext, setShowContext] = useState(false);
@@ -449,6 +554,9 @@ function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  // REDESIGN: [CHANGED] Keep password visibility and the successful-login transition local to the auth screen.
+  const [showPassword, setShowPassword] = useState(false);
+  const [authSucceeded, setAuthSucceeded] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
@@ -498,13 +606,7 @@ function App() {
           setAuthError(sessionError.message || "Could not read current session.");
         }
 
-        if (FORCE_LOGIN_ON_VISIT && data.session) {
-          await supabase.auth.signOut();
-          setSession(null);
-          setAuthMessage("Please sign in to continue.");
-          return;
-        }
-
+        // FIXED: session persistence
         setSession(data.session || null);
       } catch {
         // INSPECTOR: [SILENT CATCH] Auth bootstrap failures now resolve to the login screen instead of hanging forever.
@@ -526,6 +628,15 @@ function App() {
             setIsPasswordRecovery(true);
             setAuthMode("recovery");
           }
+          if (event === "SIGNED_IN" && nextSession) {
+            // FIXED: session persistence
+            // REDESIGN: [CHANGED] Show success feedback before revealing the protected application.
+            setAuthSucceeded(true);
+            // ANIMATION: Allow the checkmark and form exit to finish before revealing the app.
+            window.setTimeout(() => setSession(nextSession), AUTH_SUCCESS_REDIRECT_MS);
+            return;
+          }
+          // FIXED: session persistence
           setSession(nextSession || null);
         })
       : { data: { subscription: { unsubscribe: () => {} } } };
@@ -535,6 +646,8 @@ function App() {
       authListener?.subscription?.unsubscribe();
     };
   }, []);
+
+  useEffect(() => () => window.clearTimeout(authErrorTimerRef.current), []);
 
   useEffect(() => {
     // FIXER: [CHANGED] Every auth transition invalidates pending feedback and clears row-local UI state.
@@ -920,6 +1033,7 @@ function App() {
     }
 
     setAuthBusy(true);
+    setAuthSucceeded(false);
     setAuthError("");
     setAuthMessage("");
 
@@ -972,6 +1086,14 @@ function App() {
     } finally {
       setAuthBusy(false);
     }
+  }
+
+  function handleAuthInput(setter, value) {
+    setter(value);
+    if (!authError) return;
+    window.clearTimeout(authErrorTimerRef.current);
+    // ANIMATION: Once the user resumes typing, stale feedback leaves gently after a short recovery window.
+    authErrorTimerRef.current = window.setTimeout(() => setAuthError(""), AUTH_ERROR_DISMISS_MS);
   }
 
   async function handleForgotPassword() {
@@ -1067,27 +1189,55 @@ function App() {
           </button>
         </header>
 
-        {/* AGENT2: [CHANGE] The auth screen prioritizes the form while keeping the product promise visible. */}
+        {/* REDESIGN: [CHANGED] Premium split-screen auth experience with product storytelling and live rewrite examples. */}
         <main className="auth-layout">
-          <section className="auth-story">
-            <div className="auth-copy">
-              <span className="eyebrow">YOUR VOICE, REFINED</span>
-              <h1>Write the email you meant to send.</h1>
-              <p>
-                Turn rough thoughts into clear, confident messages. PhraseAI learns from every final edit so the result sounds more like you over time.
-              </p>
-              <div className="auth-benefits" aria-label="Product benefits">
+          <motion.section
+            className="auth-story"
+            style={{ y: authBackgroundY }}
+            {...AUTH_BACKGROUND_MOTION}
+          >
+            {/* ANIMATION: Left-panel children enter in a deliberate headline-to-product sequence. */}
+            <motion.div className="auth-copy" variants={AUTH_LEFT_SEQUENCE} initial="hidden" animate="visible">
+              <motion.span className="eyebrow" variants={AUTH_LEFT_ITEM}>YOUR VOICE, REFINED</motion.span>
+              <motion.h1 variants={AUTH_LEFT_ITEM}>Write like yourself. Only better.</motion.h1>
+              <motion.p variants={AUTH_LEFT_ITEM}>
+                PhraseAI turns rough thoughts into clear, confident messages while learning the choices that make your writing yours.
+              </motion.p>
+              <motion.div className="auth-benefits" aria-label="Product benefits" variants={AUTH_LEFT_ITEM}>
                 <span><CheckIcon /> Intent preserved</span>
                 <span><CheckIcon /> Style learned privately</span>
                 <span><CheckIcon /> Ready in seconds</span>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
+
+            {/* ANIMATION: The card layer enters after the copy and parallax-scrolls independently on mobile. */}
+            <motion.div className="auth-floating-cards" aria-hidden="true" style={{ y: authCardsY }}>
+              <motion.div
+                className="auth-floating-cards-entrance"
+                variants={AUTH_CARDS_ENTRANCE}
+                initial="hidden"
+                animate="visible"
+              >
+                <article className="rewrite-float-card rewrite-float-card-one">
+                  <div className="rewrite-card-label"><span>Before</span><span>Quick note</span></div>
+                  <p>Hey, just checking if you saw the proposal?</p>
+                </article>
+                <article className="rewrite-float-card rewrite-float-card-two">
+                  <div className="rewrite-card-label"><span><SparkleIcon /> PhraseAI</span><span>Refined</span></div>
+                  <p>Hi Maya, I wanted to follow up on the proposal I shared last week.</p>
+                </article>
+                <article className="rewrite-float-card rewrite-float-card-three">
+                  <div className="rewrite-card-label"><span>Style match</span><span>92%</span></div>
+                  <p>Clear, warm, and direct. Just like you.</p>
+                </article>
+              </motion.div>
+            </motion.div>
 
             <div className="auth-preview" aria-hidden="true">
               <div className="preview-toolbar">
                 <span className="preview-dot" />
-                <span>Reply draft</span>
-                <span className="preview-status"><SparkleIcon /> Refined</span>
+                <span>Personal writing profile</span>
+                <span className="preview-status"><SparkleIcon /> Learning</span>
               </div>
               <div className="preview-content">
                 <div className="preview-line short" />
@@ -1101,38 +1251,55 @@ function App() {
                 <span>Private by account</span>
               </div>
             </div>
-          </section>
+          </motion.section>
 
-          <section className="auth-form-wrap">
-            <form className="auth-form" onSubmit={handleAuthSubmit}>
-              <div className="auth-form-heading">
+          {/* ANIMATION: The form panel arrives from the right after the atmospheric background begins. */}
+          <motion.section className="auth-form-wrap" {...AUTH_PANEL_MOTION}>
+            <motion.form
+              className="auth-form"
+              onSubmit={handleAuthSubmit}
+              initial={false}
+              animate={authSucceeded ? AUTH_SUCCESS_EXIT : authError ? AUTH_ERROR_SHAKE : AUTH_FORM_REST}
+            >
+              <motion.div
+                className="auth-form-content"
+                variants={AUTH_FORM_SEQUENCE}
+                initial="hidden"
+                animate="visible"
+              >
+              <motion.div className="auth-form-brand" variants={AUTH_FORM_ITEM}>
+                <BrandLogoIcon light />
+                <span>PhraseAI</span>
+              </motion.div>
+              <motion.div className="auth-form-heading" variants={AUTH_FORM_ITEM}>
                 <span className="eyebrow">{isPasswordRecovery ? "ACCOUNT RECOVERY" : authMode === "signin" ? "WELCOME BACK" : "GET STARTED"}</span>
-                <h2>{isPasswordRecovery ? "Set a new password" : authMode === "signin" ? "Sign in to PhraseAI" : "Create your workspace"}</h2>
+                <h2>{isPasswordRecovery ? "Set a new password" : authMode === "signin" ? "Welcome back" : "Create your workspace"}</h2>
                 <p>
                   {isPasswordRecovery
                     ? "Choose a secure password to finish recovering your account."
                     : authMode === "signin"
-                      ? "Continue building a writing style that sounds like you."
+                      ? "Sign in to continue writing at your best"
                       : "Start with a private workspace for your rewrites and style profile."}
                 </p>
-              </div>
+              </motion.div>
 
               {!isPasswordRecovery ? (
-                <div className="field-group">
+                <motion.div className="field-group" variants={AUTH_FORM_ITEM}>
                   <label htmlFor="auth-email">Email</label>
                   <input
                     id="auth-email"
                     type="email"
                     value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    onChange={(event) => handleAuthInput(setEmail, event.target.value)}
                     required
                     autoComplete="email"
-                    placeholder="you@company.com"
+                    // FIXED: placeholder updated
+                    placeholder="Enter your email"
                   />
-                </div>
+                </motion.div>
               ) : null}
 
-              <div className="field-group">
+              <motion.div className="field-group" variants={AUTH_FORM_ITEM}>
                 <div className="field-label-row">
                   <label htmlFor="auth-password">{isPasswordRecovery ? "New password" : "Password"}</label>
                   {authMode === "signin" && !isPasswordRecovery ? (
@@ -1141,49 +1308,96 @@ function App() {
                     </button>
                   ) : null}
                 </div>
-                <input
-                  id="auth-password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete={authMode === "signin" ? "current-password" : "new-password"}
-                  placeholder="At least 8 characters"
-                />
-              </div>
+                <div className="auth-password-field">
+                  <input
+                    id="auth-password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(event) => handleAuthInput(setPassword, event.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+                    placeholder="At least 8 characters"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword((current) => !current)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </motion.div>
 
-              <button type="submit" className="primary-button auth-submit" disabled={authBusy}>
-                <span>{authBusy ? "Working..." : isPasswordRecovery ? "Update password" : authMode === "signin" ? "Sign in" : "Create account"}</span>
-                {!authBusy ? <ArrowIcon /> : <span className="button-spinner" />}
-              </button>
+              {/* ANIMATION: Button states crossfade, press physically, and draw the success mark before redirect. */}
+              <motion.button
+                type="submit"
+                className="primary-button auth-submit"
+                disabled={authBusy || authSucceeded}
+                variants={AUTH_BUTTON_ITEM}
+                whileHover={authBusy || authSucceeded ? undefined : AUTH_BUTTON_HOVER}
+                whileTap={authBusy || authSucceeded ? undefined : AUTH_BUTTON_TAP}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    className="auth-button-state"
+                    key={authSucceeded ? "success" : authBusy ? "loading" : "idle"}
+                    {...AUTH_STATE_SWAP}
+                  >
+                    {authSucceeded ? (
+                      <><span>Signed in</span><AnimatedCheckIcon /></>
+                    ) : authBusy ? (
+                      <><span>Signing in...</span><span className="button-spinner" /></>
+                    ) : (
+                      <>
+                        <span>{isPasswordRecovery ? "Update password" : authMode === "signin" ? "Sign in" : "Create account"}</span>
+                        <ArrowIcon />
+                      </>
+                    )}
+                  </motion.span>
+                </AnimatePresence>
+              </motion.button>
 
               {!isPasswordRecovery ? (
-                <p className="auth-switch">
-                  {authMode === "signin" ? "New to PhraseAI?" : "Already have an account?"}
+                <motion.p className="auth-switch" variants={AUTH_FORM_ITEM}>
+                  {authMode === "signin" ? "Don't have an account?" : "Already have an account?"}
                   <button
                     type="button"
                     onClick={() => {
                       setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
+                      setShowPassword(false);
+                      setAuthSucceeded(false);
                       setAuthError("");
                       setAuthMessage("");
                     }}
                   >
-                    {authMode === "signin" ? "Create an account" : "Sign in"}
+                    {authMode === "signin" ? "Sign up" : "Sign in"}
                   </button>
-                </p>
+                </motion.p>
               ) : null}
 
-              <div className="auth-message-slot" aria-live="polite">
-                {authError ? <p className="status-message error">{authError}</p> : null}
-                {authMessage ? <p className="status-message success">{authMessage}</p> : null}
-              </div>
-            </form>
+              <motion.div className="auth-message-slot" aria-live="polite" variants={AUTH_FORM_ITEM}>
+                <AnimatePresence mode="wait">
+                  {authError ? (
+                    <motion.p key="auth-error" className="status-message error" {...AUTH_ERROR_MOTION}>
+                      {authError}
+                    </motion.p>
+                  ) : null}
+                  {!authError && authMessage ? (
+                    <motion.p key="auth-message" className="status-message success" {...AUTH_ERROR_MOTION}>
+                      {authMessage}
+                    </motion.p>
+                  ) : null}
+                </AnimatePresence>
+              </motion.div>
+              </motion.div>
+            </motion.form>
             <p className="auth-footnote">
               By continuing, you agree to keep account access private. Need help?{" "}
               <a href="mailto:support@phraseai.app">Contact support</a>.
             </p>
-          </section>
+          </motion.section>
         </main>
       </div>
     );

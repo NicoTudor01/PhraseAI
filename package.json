@@ -3,8 +3,8 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "npm --prefix frontend run dev -- --host 0.0.0.0 --port 5173",
-    "build": "npm --prefix frontend run build",
-    "preview": "npm --prefix frontend run preview"
+    "dev": "npm --prefix Coding/frontend run dev -- --host 0.0.0.0 --port 5173",
+    "build": "npm --prefix Coding/frontend run build",
+    "preview": "npm --prefix Coding/frontend run preview"
   }
 }
