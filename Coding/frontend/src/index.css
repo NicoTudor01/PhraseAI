@@ -263,9 +263,9 @@ a:focus-visible {
   overflow: hidden;
   padding: 132px clamp(46px, 7vw, 116px) 64px;
   background:
-    radial-gradient(circle at 50% 48%, rgba(116, 92, 246, 0.2), transparent 38%),
+    radial-gradient(circle at 50% 48%, rgba(103, 217, 163, 0.14), transparent 38%),
     radial-gradient(circle at 12% 78%, rgba(55, 211, 154, 0.16), transparent 36%),
-    linear-gradient(135deg, #0a0f1e, #1a0a2e 50%, #050810);
+    linear-gradient(135deg, #0a0f1e, #080a12 50%, #050810);
   background-size: 140% 140%;
   animation: authGradientShift 8s ease-in-out infinite alternate;
   will-change: transform;
@@ -285,8 +285,8 @@ a:focus-visible {
   right: 9%;
   width: 240px;
   height: 240px;
-  background: radial-gradient(circle, rgba(124, 103, 255, 0.2), rgba(124, 103, 255, 0));
-  box-shadow: 0 0 100px rgba(124, 103, 255, 0.18);
+  background: radial-gradient(circle, rgba(103, 217, 163, 0.18), rgba(103, 217, 163, 0));
+  box-shadow: 0 0 100px rgba(103, 217, 163, 0.16);
   transform-origin: center;
   animation: authGlowPulse 6s ease-in-out infinite;
 }
@@ -451,7 +451,7 @@ a:focus-visible {
   width: 240px;
   padding: 15px 16px;
   color: #eef2ff;
-  background: rgba(19, 22, 40, 0.78);
+  background: rgba(8, 10, 18, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 14px;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.26);
