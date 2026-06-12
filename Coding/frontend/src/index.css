@@ -246,16 +246,23 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
-.auth-layout {
+.auth-hero-stage {
   position: relative;
   z-index: 1;
+  height: 155dvh;
+}
+
+.auth-layout {
+  position: sticky;
+  top: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(480px, 0.92fr);
   width: 100%;
-  min-height: calc(100dvh + 300px);
+  min-height: 100dvh;
+  height: 100dvh;
   margin: 0 auto;
   overflow: hidden;
-  transform-origin: 50% 16%;
+  transform-origin: 50% 44%;
   will-change: transform, opacity;
 }
 
@@ -772,15 +779,15 @@ a:focus-visible {
 .auth-details {
   position: relative;
   z-index: 6;
-  margin-top: -72px;
+  margin-top: -42dvh;
   padding: 112px clamp(28px, 6vw, 92px) 84px;
   color: #f8fafc;
   background:
     radial-gradient(circle at 84% 16%, rgba(103, 217, 163, 0.1), transparent 24%),
     #080a12;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 32px 32px 0 0;
-  box-shadow: 0 -28px 80px rgba(0, 0, 0, 0.24);
+  border-radius: 38px 38px 0 0;
+  box-shadow: 0 -42px 110px rgba(0, 0, 0, 0.42);
   transform-origin: 50% 0;
   will-change: transform;
 }
@@ -2483,11 +2490,17 @@ a:focus-visible {
   }
 
   .auth-layout {
-    position: relative;
+    position: sticky;
+    top: 0;
     display: grid;
     grid-template-columns: 1fr;
-    min-height: calc(100dvh + 160px);
+    min-height: 100dvh;
+    height: 100dvh;
     padding: 86px 16px 56px;
+  }
+
+  .auth-hero-stage {
+    height: 145dvh;
   }
 
   .auth-story {
@@ -2539,7 +2552,7 @@ a:focus-visible {
   }
 
   .auth-details {
-    margin-top: -46px;
+    margin-top: -34dvh;
     padding: 82px 20px 60px;
     border-radius: 24px 24px 0 0;
   }

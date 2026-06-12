@@ -16,16 +16,18 @@ const API_TIMEOUT_MS = 65000;
 // SCROLL-ANIM: Shared curves and timings keep the login choreography native to the existing UI.
 const AUTH_EASE_OUT = [0.16, 1, 0.3, 1];
 const AUTH_EASE_IN_OUT = [0.65, 0, 0.35, 1];
-const AUTH_SCROLL_INPUT = [0, 300];
+const AUTH_SCROLL_INPUT = [0, 620];
 // SCROLL-ANIM: Normal flow moves at 1x; these transforms offset it to net 0.4x and 0.6x speeds.
-const AUTH_BACKGROUND_SCROLL_OUTPUT = [0, 180];
-const AUTH_CARDS_SCROLL_OUTPUT = [0, -60];
+const AUTH_BACKGROUND_SCROLL_OUTPUT = [0, 250];
+const AUTH_CARDS_SCROLL_OUTPUT = [0, -145];
 const AUTH_SCROLL_SPRING = { stiffness: 86, damping: 24, mass: 0.72, restDelta: 0.001 };
 const AUTH_PULL_SCROLL_INPUT = [0, 760];
-const AUTH_HERO_SCALE_OUTPUT = [1, 0.975];
-const AUTH_HERO_OPACITY_OUTPUT = [1, 0.72];
-const AUTH_DETAILS_PULL_OUTPUT = [72, 0];
-const AUTH_DETAILS_SCALE_OUTPUT = [0.985, 1];
+const AUTH_HERO_SCALE_OUTPUT = [1, 0.9];
+const AUTH_HERO_OPACITY_OUTPUT = [1, 0.3];
+const AUTH_HERO_Y_OUTPUT = [0, -92];
+const AUTH_DETAILS_PULL_OUTPUT = [180, 0];
+const AUTH_DETAILS_SCALE_OUTPUT = [0.88, 1];
+const AUTH_DETAILS_ROTATE_OUTPUT = [-3.5, 0];
 const AUTH_SUCCESS_REDIRECT_MS = 980;
 const AUTH_ERROR_DISMISS_MS = 4000;
 const AUTH_BACKGROUND_MOTION = {
@@ -540,8 +542,10 @@ function App() {
   // SCROLL-ANIM: The full hero yields while the details surface rises, creating one continuous pulling gesture.
   const authHeroScale = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_HERO_SCALE_OUTPUT);
   const authHeroOpacity = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_HERO_OPACITY_OUTPUT);
+  const authHeroY = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_HERO_Y_OUTPUT);
   const authDetailsY = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_PULL_OUTPUT);
   const authDetailsScale = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_SCALE_OUTPUT);
+  const authDetailsRotate = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_ROTATE_OUTPUT);
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
   const [showContext, setShowContext] = useState(false);
@@ -1211,10 +1215,11 @@ function App() {
         </header>
 
         {/* REDESIGN: [CHANGED] Premium split-screen auth experience with product storytelling and live rewrite examples. */}
-        <motion.main
-          className="auth-layout"
-          style={{ scale: authHeroScale, opacity: authHeroOpacity }}
-        >
+        <div className="auth-hero-stage">
+          <motion.main
+            className="auth-layout"
+            style={{ scale: authHeroScale, opacity: authHeroOpacity, y: authHeroY }}
+          >
           <motion.section
             className="auth-story"
             style={{ y: authBackgroundY }}
@@ -1422,12 +1427,13 @@ function App() {
               <a href="mailto:support@phraseai.app">Contact support</a>.
             </p>
           </motion.section>
-        </motion.main>
+          </motion.main>
+        </div>
 
         <motion.section
           className="auth-details"
           aria-labelledby="auth-details-title"
-          style={{ y: authDetailsY, scale: authDetailsScale }}
+          style={{ y: authDetailsY, scale: authDetailsScale, rotate: authDetailsRotate }}
         >
           <motion.div
             className="auth-details-inner"
