@@ -139,6 +139,17 @@ const APP_BUTTON_TAP = {
   scale: 0.985,
   transition: { duration: 0.16, ease: AUTH_EASE_OUT },
 };
+// FRONTEND ENGINEER: Shared Style Profile motion keeps every section scroll-triggered and staggered.
+const STYLE_SECTION_VIEWPORT = { once: true, margin: "-80px" };
+const STYLE_SECTION_MOTION = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: AUTH_EASE_OUT, staggerChildren: 0.08 } },
+};
+const STYLE_ITEM_MOTION = {
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.42, ease: AUTH_EASE_OUT } },
+};
+const STYLE_CARD_HOVER = { y: -3, transition: { duration: 0.2, ease: AUTH_EASE_OUT } };
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   // FIXED: session persistence
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
@@ -410,6 +421,7 @@ function normalizeStyleData(payload = {}) {
     : [];
   const emailHistory = payload.email_history || payload.history || [];
   const styleTags = payload.style_tags || payload.tags || [];
+  const feedbackEvents = payload.feedback_events || payload.style_feedback || [];
   const latestSnapshot = sortedSnapshots[sortedSnapshots.length - 1] || {};
   const learnedExamples = Number(currentStyle?.stats?.learned_examples || emailHistory.length || 0);
   const rawStrength =
@@ -423,19 +435,29 @@ function normalizeStyleData(payload = {}) {
     currentStyle,
     personaSnapshots: sortedSnapshots,
     emailHistory: Array.isArray(emailHistory) ? emailHistory : [],
+    feedbackEvents: Array.isArray(feedbackEvents) ? feedbackEvents : [],
     styleTags: Array.isArray(styleTags) ? styleTags : [],
     styleStrength: Number.isFinite(normalizedStrength)
       ? Math.max(0, Math.min(1, normalizedStrength > 1 ? normalizedStrength / 100 : normalizedStrength))
       : 0,
     lastUpdated: payload.last_updated || payload.updated_at || currentStyle?.stats?.last_learned_at || "",
-    personaSummary: payload.persona_summary || payload.summary || "",
+    personaLabel: payload.persona_label || currentStyle.persona_label || "",
+    personaSummary: payload.persona_summary || currentStyle.persona_summary || payload.summary || "",
+    emailsAnalyzed: Number(payload.emails_analyzed || currentStyle.emails_analyzed || currentStyle?.stats?.learned_examples || emailHistory.length || 0),
   };
 }
 
 function titleCase(value) {
   return String(value || "")
     .replaceAll("_", " ")
+    .replaceAll("-", " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0%";
+  return `${Math.round(Math.max(0, Math.min(1, number > 1 ? number / 100 : number)) * 100)}%`;
 }
 
 function formatDate(value, options = {}) {
@@ -454,25 +476,27 @@ function getPersonaTraits(style = {}, tags = []) {
   const persona = style.persona || {};
   const confidences = persona.confidence || persona.confidences || style.confidence || {};
   const rawTraits = Array.isArray(persona.traits) ? persona.traits : [];
+  const labelMap = {
+    tone_formal_casual: "tone",
+    average_sentence_length: "sentence rhythm",
+    vocabulary_richness: "vocabulary",
+    punctuation_patterns: "punctuation",
+    preferred_openers: "openings",
+    preferred_closers: "sign-offs",
+    top_recurring_phrases: "signature phrases",
+    active_voice_ratio: "active voice",
+    humor_presence: "humor",
+    contraction_usage: "contractions",
+    deference_markers: "deference",
+    ask_placement: "ask placement",
+  };
   const learnedTraits = Object.entries(style.traits || {}).map(([key, trait]) => ({
-    label:
-      key === "tone_formal_casual"
-        ? trait?.value
-        : key === "average_sentence_length"
-          ? "sentence rhythm"
-          : key === "vocabulary_richness"
-            ? "word variety"
-            : key === "punctuation_patterns"
-              ? "punctuation"
-              : key === "preferred_openers"
-                ? "openings"
-                : key === "preferred_closers"
-                  ? "sign-offs"
-                  : key === "top_recurring_phrases"
-                    ? "signature phrases"
-                    : key,
+    label: labelMap[key] || key,
     category: key,
     confidence: trait?.confidence,
+    score: trait?.score ?? trait?.value,
+    trend: trait?.trend || "stable",
+    raw: trait,
   }));
   const labeledTraits = ["formality", "directness", "energy"]
     .filter((key) => persona[key])
@@ -491,12 +515,17 @@ function getPersonaTraits(style = {}, tags = []) {
         confidences[label] ??
         Math.max(0.44, 0.88 - index * 0.07);
       const confidence = Number(confidenceValue);
+      const scoreValue = value.score ?? value.raw?.score ?? value.raw?.confidence ?? confidenceValue;
+      const score = Number(scoreValue);
       return {
         label,
         category: value.category || "trait",
         confidence: Number.isFinite(confidence)
           ? Math.max(0.2, Math.min(1, confidence > 1 ? confidence / 100 : confidence))
           : 0.6,
+        score: Number.isFinite(score) ? Math.max(0, Math.min(1, score > 1 ? score / 100 : score)) : 0.5,
+        trend: value.trend || value.raw?.trend || "stable",
+        raw: value.raw || {},
       };
     })
     .filter((trait) => {
@@ -506,6 +535,37 @@ function getPersonaTraits(style = {}, tags = []) {
       return true;
     })
     .slice(0, 7);
+}
+
+function getTraitCards(style = {}) {
+  const traits = style.traits || {};
+  const descriptions = {
+    formality: "How polished and professional your emails feel.",
+    warmth: "How much relational softness and friendliness shows through.",
+    confidence: "How assertively you make recommendations and asks.",
+    directness: "How quickly and clearly you get to the point.",
+    vocabulary_richness: "How varied and precise your word choice is.",
+    active_voice_ratio: "How often your sentences feel active and agent-driven.",
+    empathy: "How often you acknowledge the reader's situation.",
+    urgency: "How strongly you signal deadlines or action pressure.",
+    humor_presence: "How often personality or levity enters your emails.",
+    deference_markers: "How often you soften requests with deference.",
+    contraction_usage: "How conversational your phrasing feels.",
+    reciprocity: "How often you offer help before or alongside asks.",
+  };
+  return Object.entries(descriptions).map(([key, description]) => {
+    const trait = traits[key] || {};
+    const score = Number(trait.score ?? trait.confidence ?? 0);
+    const confidence = Number(trait.confidence ?? 0);
+    return {
+      key,
+      name: titleCase(key),
+      description,
+      score: Number.isFinite(score) ? Math.max(0, Math.min(1, score > 1 ? score / 100 : score)) : 0,
+      confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence > 1 ? confidence / 100 : confidence)) : 0,
+      trend: trait.trend || "stable",
+    };
+  });
 }
 
 function buildPersonaSummary(style = {}, suppliedSummary = "") {
@@ -536,7 +596,7 @@ function buildPersonaSummary(style = {}, suppliedSummary = "") {
   return `${opening}${rhythm}${warmth}${signoff}`;
 }
 
-function PersonaMap({ initials, traits }) {
+function PersonaMap({ initials, traits, personaLabel, onSelectTrait }) {
   const nodes = traits.map((trait, index) => {
     const angle = -Math.PI / 2 + (index * Math.PI * 2) / Math.max(traits.length, 1);
     return {
@@ -564,23 +624,39 @@ function PersonaMap({ initials, traits }) {
       <circle className="persona-orbit persona-orbit-one" cx="210" cy="155" r="92" />
       <circle className="persona-orbit persona-orbit-two" cx="210" cy="155" r="130" />
       {nodes.map((node, index) => (
-        <g key={`${node.label}-${index}`}>
-          <line
+        <motion.g
+          key={`${node.label}-${index}`}
+          className="persona-node-group"
+          initial={{ opacity: 0, scale: 0.82 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={STYLE_SECTION_VIEWPORT}
+          transition={{ duration: 0.35, delay: index * 0.08, ease: AUTH_EASE_OUT }}
+          whileHover={{ scale: 1.04 }}
+          onClick={() => onSelectTrait?.(node)}
+          tabIndex="0"
+          role="button"
+          aria-label={`${titleCase(node.label)} score ${formatPercent(node.score)} confidence ${formatPercent(node.confidence)}`}
+        >
+          <motion.line
             className="persona-edge"
             x1="210"
             y1="155"
             x2={node.x}
             y2={node.y}
             style={{ opacity: 0.18 + node.confidence * 0.68, strokeWidth: 0.8 + node.confidence * 2.2 }}
+            initial={{ pathLength: 0 }}
+            whileInView={{ pathLength: 1 }}
+            viewport={STYLE_SECTION_VIEWPORT}
+            transition={{ duration: 0.55, delay: 0.35 + index * 0.05, ease: AUTH_EASE_OUT }}
           />
           <circle
             className="persona-node-halo"
             cx={node.x}
             cy={node.y}
-            r={24 + node.confidence * 5}
+            r={18 + node.confidence * 12}
             style={{ opacity: 0.06 + node.confidence * 0.08 }}
           />
-          <circle className="persona-node" cx={node.x} cy={node.y} r={4.5 + node.confidence * 2.5} />
+          <circle className="persona-node" cx={node.x} cy={node.y} r={5 + node.confidence * 7} />
           <text
             className="persona-node-label"
             x={node.x}
@@ -597,12 +673,102 @@ function PersonaMap({ initials, traits }) {
           >
             {Math.round(node.confidence * 100)}%
           </text>
-        </g>
+          <title>{`${titleCase(node.label)}: score ${formatPercent(node.score)}, confidence ${formatPercent(node.confidence)}, trend ${node.trend}`}</title>
+        </motion.g>
       ))}
       <circle className="persona-core-glow" cx="210" cy="155" r="42" filter="url(#personaGlow)" />
       <circle className="persona-core" cx="210" cy="155" r="34" fill="url(#personaCore)" />
       <text className="persona-initials" x="210" y="161" textAnchor="middle">{initials}</text>
+      <text className="persona-core-label" x="210" y="208" textAnchor="middle">{personaLabel}</text>
     </svg>
+  );
+}
+
+function StyleSection({ className = "", children }) {
+  return (
+    <motion.section
+      className={className}
+      variants={STYLE_SECTION_MOTION}
+      initial="hidden"
+      whileInView="visible"
+      viewport={STYLE_SECTION_VIEWPORT}
+    >
+      {children}
+    </motion.section>
+  );
+}
+
+function CompletenessRing({ value, label = "complete" }) {
+  const normalized = Math.max(0, Math.min(1, Number(value) || 0));
+  const circumference = 2 * Math.PI * 44;
+  const offset = circumference * (1 - normalized);
+  return (
+    <div className="profile-ring" aria-label={`Style profile ${formatPercent(normalized)} ${label}`}>
+      <svg viewBox="0 0 104 104">
+        <circle className="profile-ring-track" cx="52" cy="52" r="44" />
+        <motion.circle
+          className="profile-ring-progress"
+          cx="52"
+          cy="52"
+          r="44"
+          strokeDasharray={circumference}
+          initial={{ strokeDashoffset: circumference }}
+          whileInView={{ strokeDashoffset: offset }}
+          viewport={STYLE_SECTION_VIEWPORT}
+          transition={{ duration: 0.8, delay: 0.3, ease: AUTH_EASE_OUT }}
+        />
+      </svg>
+      <strong>{formatPercent(normalized)}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function TraitBreakdownCard({ trait }) {
+  const trendLabel = trait.trend === "increasing" ? "↑ Growing" : trait.trend === "shifting" ? "↓ Shifting" : "→ Stable";
+  const confidenceClass = trait.confidence > 0.7 ? "high" : trait.confidence > 0.4 ? "medium" : "low";
+  return (
+    <motion.article className="trait-breakdown-card" variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
+      <div className="trait-card-topline">
+        <span>{trait.name}</span>
+        <em className={`confidence-dot ${confidenceClass}`} />
+      </div>
+      <strong>{formatPercent(trait.score)}</strong>
+      <div className="trait-score-bar">
+        <motion.span
+          initial={{ width: 0 }}
+          whileInView={{ width: `${Math.round(trait.score * 100)}%` }}
+          viewport={STYLE_SECTION_VIEWPORT}
+          transition={{ duration: 0.6, ease: AUTH_EASE_OUT }}
+        />
+      </div>
+      <p>{trait.description}</p>
+      <small>{trendLabel} · confidence {formatPercent(trait.confidence)}</small>
+    </motion.article>
+  );
+}
+
+function TraitDrawer({ trait, onClose }) {
+  if (!trait) return null;
+  return (
+    <motion.aside
+      className="trait-drawer"
+      initial={{ opacity: 0, x: 24 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 24 }}
+      transition={{ duration: 0.25, ease: AUTH_EASE_OUT }}
+    >
+      <button type="button" onClick={onClose} aria-label="Close trait details">×</button>
+      <span className="eyebrow">TRAIT DETAIL</span>
+      <h3>{titleCase(trait.label)}</h3>
+      <p>Score {formatPercent(trait.score)} with {formatPercent(trait.confidence)} confidence. Trend: {trait.trend || "stable"}.</p>
+      <div className="trait-sparkline" aria-hidden="true">
+        {[0.3, 0.42, 0.38, trait.confidence || 0.5, trait.score || 0.5].map((point, index) => (
+          <span key={index} style={{ height: `${Math.max(16, point * 54)}px` }} />
+        ))}
+      </div>
+      <p className="drawer-note">Recent rewrites use this trait as a weighted suggestion. Higher confidence means PhraseAI follows it more strongly.</p>
+    </motion.aside>
   );
 }
 
@@ -639,6 +805,10 @@ function App() {
   const [styleDataLoading, setStyleDataLoading] = useState(false);
   const [styleDataError, setStyleDataError] = useState("");
   const [selectedSnapshotId, setSelectedSnapshotId] = useState("");
+  const [selectedTrait, setSelectedTrait] = useState(null);
+  const [expandedHistoryIds, setExpandedHistoryIds] = useState({});
+  const [manualEditIds, setManualEditIds] = useState({});
+  const [manualEditDrafts, setManualEditDrafts] = useState({});
   // FIXER: [CHANGED] Feedback state is row-specific so independent history entries can update concurrently.
   const [feedbackBusyIds, setFeedbackBusyIds] = useState({});
   const [feedbackMessages, setFeedbackMessages] = useState({});
@@ -1046,7 +1216,7 @@ function App() {
   }
 
   // FIXER: [CHANGED] Optimistically rate one row, consume the returned aggregate, and roll back only that row on failure.
-  async function handleHistoryFeedback(entryId, rating) {
+  async function handleHistoryFeedback(entryId, rating, extraPayload = {}) {
     if (!entryId) return;
     const rowId = String(entryId);
     if (feedbackPendingRef.current.has(rowId)) return;
@@ -1070,6 +1240,7 @@ function App() {
               feedback: {
                 ...(typeof entry.feedback === "object" && entry.feedback ? entry.feedback : {}),
                 style_rating: rating,
+                manual_edit: extraPayload.manual_edit,
               },
             }
           : entry),
@@ -1078,7 +1249,7 @@ function App() {
     try {
       const response = await apiFetch(`/email-history/${encodeURIComponent(entryId)}/feedback`, {
         method: "POST",
-        body: JSON.stringify({ rating }),
+        body: JSON.stringify({ rating, ...extraPayload }),
       });
       // FIXER: [CHANGED] Ignore responses belonging to a session that has since ended or changed.
       if (authGenerationRef.current !== requestGeneration) return;
@@ -1101,9 +1272,12 @@ function App() {
         ...current,
         [rowId]: {
           type: "success",
-          text: rating === "good" ? "Saved as a good match." : "Saved. PhraseAI will adjust.",
+          text: rating === "good" ? "Saved as a good match." : rating === "edited" ? "Saved your edit. PhraseAI learned from the correction." : "Saved. PhraseAI will adjust.",
         },
       }));
+      if (rating === "edited") {
+        setManualEditIds((current) => ({ ...current, [rowId]: false }));
+      }
     } catch (err) {
       if (authGenerationRef.current !== requestGeneration) return;
       feedbackPendingRef.current.delete(rowId);
@@ -1950,9 +2124,19 @@ function App() {
               const rowId = String(id);
               const busy = Boolean(feedbackBusyIds[rowId]);
               const feedbackMessage = feedbackMessages[rowId];
+              const expandedOriginal = Boolean(expandedHistoryIds[rowId]);
+              const editingManual = Boolean(manualEditIds[rowId]);
+              const manualDraft = manualEditDrafts[rowId] ?? rewrite;
 
               return (
-                <article className="email-history-item" key={id}>
+                <motion.article
+                  className="email-history-item"
+                  key={id}
+                  initial={{ opacity: 0, y: 18 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={STYLE_SECTION_VIEWPORT}
+                  transition={{ duration: 0.38, delay: Math.min(index * 0.04, 0.18), ease: AUTH_EASE_OUT }}
+                >
                   <div className="email-history-meta">
                     <span>{formatDate(entry.finalized_at || entry.submitted_at || entry.created_at)}</span>
                     {traits.length ? <span>{traits.length} traits influenced</span> : <span>Profile signal</span>}
@@ -1960,7 +2144,16 @@ function App() {
                   <div className="email-compare">
                     <div>
                       <span className="email-compare-label">Original</span>
-                      <p>{original || "Original text unavailable."}</p>
+                      <p className={expandedOriginal ? "expanded" : ""}>{original || "Original text unavailable."}</p>
+                      {original.length > 160 ? (
+                        <button
+                          type="button"
+                          className="text-action tiny"
+                          onClick={() => setExpandedHistoryIds((current) => ({ ...current, [rowId]: !expandedOriginal }))}
+                        >
+                          {expandedOriginal ? "Collapse" : "Expand original"}
+                        </button>
+                      ) : null}
                     </div>
                     <div className="email-rewrite">
                       <span className="email-compare-label">Your version</span>
@@ -1995,8 +2188,54 @@ function App() {
                       >
                         <span aria-hidden="true">×</span> Off
                       </button>
+                      <button
+                        type="button"
+                        className={feedback === "edited" ? "feedback-button active" : "feedback-button"}
+                        disabled={busy}
+                        aria-pressed={feedback === "edited"}
+                        onClick={() => {
+                          setManualEditDrafts((current) => ({ ...current, [rowId]: manualDraft }));
+                          setManualEditIds((current) => ({ ...current, [rowId]: !editingManual }));
+                        }}
+                      >
+                        ✎ I'd write it like this
+                      </button>
                     </div>
                   </div>
+                  <AnimatePresence>
+                    {editingManual ? (
+                      <motion.div
+                        className="manual-edit-box"
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.25, ease: AUTH_EASE_OUT }}
+                      >
+                        <textarea
+                          value={manualDraft}
+                          onChange={(event) => setManualEditDrafts((current) => ({ ...current, [rowId]: event.target.value }))}
+                          aria-label="Edit rewrite in your own voice"
+                        />
+                        <div>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => setManualEditIds((current) => ({ ...current, [rowId]: false }))}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="primary-button"
+                            disabled={busy || !manualDraft.trim()}
+                            onClick={() => handleHistoryFeedback(id, "edited", { manual_edit: manualDraft })}
+                          >
+                            Save edit
+                          </button>
+                        </div>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                   {feedbackMessage ? (
                     <p
                       className="history-feedback-message"
@@ -2006,7 +2245,7 @@ function App() {
                       {feedbackMessage.text}
                     </p>
                   ) : null}
-                </article>
+                </motion.article>
               );
             })}
           </div>
@@ -2022,14 +2261,26 @@ function App() {
     const selectedSnapshot = snapshots[selectedIndex >= 0 ? selectedIndex : snapshots.length - 1];
     const displayStyle = selectedSnapshot?.style || selectedSnapshot?.current_style || styleData.currentStyle;
     const traits = getPersonaTraits(displayStyle, styleData.styleTags);
-    const learnedExamples = Number(styleData.currentStyle?.stats?.learned_examples || styleData.emailHistory.length || 0);
+    const traitCards = getTraitCards(displayStyle);
+    const learnedExamples = Number(styleData.emailsAnalyzed || styleData.currentStyle?.stats?.learned_examples || styleData.emailHistory.length || 0);
     const strengthPercent = Math.round(styleData.styleStrength * 100);
+    const personaLabel = selectedSnapshot?.persona_label || displayStyle?.persona_label || styleData.personaLabel || "Emerging Voice";
     const summary = buildPersonaSummary(displayStyle, selectedSnapshot ? "" : styleData.personaSummary);
     const hasPersona = traits.length > 0 || learnedExamples > 0 || snapshots.length > 0;
+    const firstCompleteness = Number(snapshots[0]?.completeness || 0);
+    const growth = Math.max(0, Math.round((styleData.styleStrength - firstCompleteness) * 100));
+    const strengthCopy = strengthPercent < 30
+      ? "Submit a few more emails to get started."
+      : strengthPercent < 60
+        ? "Your profile is taking shape — keep going."
+        : strengthPercent < 85
+          ? "Strong profile — rewrites are getting very accurate."
+          : "Your style is well defined. PhraseAI knows you.";
+    const feedbackEvents = styleData.feedbackEvents || [];
 
     // FRONTEND: The profile combines map, confidence, evolution, summary, and feedback history in one responsive workspace.
     return (
-      <div className="style-page">
+      <div className="style-page style-page-rebuild">
         {styleDataLoading ? (
           <div className="style-profile-loading" aria-label="Loading style profile">
             <span /><span /><span />
@@ -2049,59 +2300,87 @@ function App() {
           </div>
         ) : (
           <>
-            <section className="style-hero-grid">
-              <div className="style-card persona-map-card">
+            <StyleSection className="style-profile-hero">
+              <motion.div variants={STYLE_ITEM_MOTION}>
+                <span className="eyebrow">CLIENT PERSONA</span>
+                <h2>{personaLabel}</h2>
+                <p>{summary}</p>
+                <div className="trait-chip-row">
+                  {traits.slice(0, 6).map((trait) => (
+                    <span className="trait-chip" key={trait.label}>{titleCase(trait.label)}</span>
+                  ))}
+                </div>
+              </motion.div>
+              <motion.div variants={STYLE_ITEM_MOTION} className="profile-ring-panel">
+                <CompletenessRing value={styleData.styleStrength} />
+                <small>Based on {learnedExamples} emails analyzed</small>
+              </motion.div>
+            </StyleSection>
+
+            <StyleSection className="style-hero-grid">
+              <motion.div className="style-card persona-map-card" variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
                 <div className="style-card-heading">
                   <div>
-                    <span className="eyebrow">PERSONA MAP</span>
-                    <h2>Your voice, mapped</h2>
-                    <p>Stronger lines mean PhraseAI has more confidence in that trait.</p>
+                    <span className="eyebrow">MENTAL MAP</span>
+                    <h2>Your voice, alive</h2>
+                    <p>Node size tracks confidence. Green intensity tracks trait strength. Click a node for details.</p>
                   </div>
                   <span className="live-profile-badge"><span /> Live profile</span>
                 </div>
                 <div className="persona-map-wrap">
-                  <PersonaMap initials={accountInitials} traits={traits} />
+                  <PersonaMap initials={accountInitials} traits={traits} personaLabel={personaLabel} onSelectTrait={setSelectedTrait} />
                 </div>
-              </div>
+                <AnimatePresence>
+                  {selectedTrait ? <TraitDrawer trait={selectedTrait} onClose={() => setSelectedTrait(null)} /> : null}
+                </AnimatePresence>
+              </motion.div>
 
               <div className="style-side-stack">
-                <section className="style-card persona-summary-card">
-                  <span className="eyebrow">IN PLAIN ENGLISH</span>
-                  <h2>This is how you sound</h2>
-                  <p>{summary}</p>
-                  <div className="trait-chip-row">
-                    {traits.slice(0, 5).map((trait) => (
-                      <span className="trait-chip" key={trait.label}>{titleCase(trait.label)}</span>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="style-card strength-card">
+                <motion.section className="style-card strength-card sticky-strength-card" variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
                   <div className="strength-heading">
                     <div>
                       <span className="eyebrow">STYLE STRENGTH</span>
-                      <h2>{strengthPercent}% understood</h2>
+                      <h2>Your style profile is {strengthPercent}% complete</h2>
                     </div>
                     <strong>{learnedExamples}</strong>
                   </div>
-                  <div className="strength-track" role="progressbar" aria-label="Style strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow={strengthPercent}>
-                    <span style={{ width: `${strengthPercent}%` }} />
-                  </div>
-                  <p>Your style profile is {strengthPercent}% complete — submit more emails to sharpen your rewrites.</p>
-                </section>
-              </div>
-            </section>
+                  <CompletenessRing value={styleData.styleStrength} label="profile" />
+                  <p>{strengthCopy}</p>
+                </motion.section>
 
-            <section className="style-card evolution-card">
+                <motion.section className="style-card feedback-impact-card" variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
+                  <div className="strength-heading">
+                    <div>
+                      <span className="eyebrow">FEEDBACK IMPACT</span>
+                      <h2>{feedbackEvents.length} trait adjustments</h2>
+                    </div>
+                  </div>
+                  {feedbackEvents.length ? (
+                    <ul>
+                      {feedbackEvents.slice(0, 5).map((event) => (
+                        <li key={event.id || `${event.rewrite_id}-${event.created_at}`}>
+                          <span>{titleCase(event.feedback_type)}</span>
+                          <p>{event.feedback_type === "off" ? "nudged dominant trait confidence down." : event.feedback_type === "edited" ? "retrained from your manual correction." : "reinforced the traits behind that rewrite."}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Rate a rewrite and this will show exactly how your feedback changed the profile.</p>
+                  )}
+                </motion.section>
+              </div>
+            </StyleSection>
+
+            <StyleSection className="style-card evolution-card">
               <div className="style-card-heading">
                 <div>
                   <span className="eyebrow">EVOLUTION</span>
                   <h2>Your profile is growing</h2>
-                  <p>Select a moment to see the persona PhraseAI understood then.</p>
+                  <p>{snapshots.length >= 3 ? `Your profile is ${growth}% more defined than when you started.` : "Submit more emails to see your style evolve."}</p>
                 </div>
                 <span className="timeline-count">{snapshots.length} snapshots</span>
               </div>
-              {snapshots.length ? (
+              {snapshots.length >= 3 ? (
                 <div className="timeline-scroll">
                   <div className="timeline-track" role="list" aria-label="Persona evolution timeline">
                     {snapshots.map((snapshot, index) => {
@@ -2119,16 +2398,29 @@ function App() {
                         >
                           <span className="timeline-dot" />
                           <strong>{index === snapshots.length - 1 ? "Now" : formatDate(snapshot.captured_at || snapshot.created_at, { short: true })}</strong>
-                          <small>{completeness ? `${completeness}% complete` : `Version ${index + 1}`}</small>
+                          <small>{completeness ? `${completeness}% complete` : `Version ${index + 1}`} · {snapshot.persona_label || "Persona"}</small>
                         </button>
                       );
                     })}
                   </div>
                 </div>
               ) : (
-                <div className="timeline-empty">Your first saved persona snapshot will appear here after more learning.</div>
+                <div className="timeline-empty">Submit more emails to see your style evolve. Timeline unlocks after 3 snapshots.</div>
               )}
-            </section>
+            </StyleSection>
+
+            <StyleSection className="style-card trait-breakdown-section">
+              <div className="style-card-heading">
+                <div>
+                  <span className="eyebrow">TRAIT BREAKDOWN</span>
+                  <h2>The dimensions PhraseAI is tracking</h2>
+                  <p>Each card shows score, confidence, and direction of movement.</p>
+                </div>
+              </div>
+              <div className="trait-breakdown-grid">
+                {traitCards.map((trait) => <TraitBreakdownCard trait={trait} key={trait.key} />)}
+              </div>
+            </StyleSection>
 
             <EmailHistoryFeed />
           </>

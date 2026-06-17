@@ -336,6 +336,7 @@ class PersistenceTests(unittest.TestCase):
                 "style_tags": [[{"tags": ["formal"], "updated_at": "now"}]],
                 "email_history": [aggregate["history"]],
                 "persona_snapshots": [aggregate["snapshots"]],
+                "style_feedback": [[]],
             }
         )
 
@@ -345,7 +346,10 @@ class PersistenceTests(unittest.TestCase):
             StyleFeedbackRequest(rating="off", history_id=4),
         )
 
-        self.assertEqual(data, aggregate)
+        self.assertEqual(data["profile"], aggregate["profile"])
+        self.assertEqual(data["history"], aggregate["history"])
+        self.assertEqual(data["snapshots"], aggregate["snapshots"])
+        self.assertEqual(data["feedback_events"], [])
         self.assertEqual(
             next(call for call in supabase.calls if call[1] == "rpc"),
             (
@@ -364,7 +368,8 @@ class PersistenceTests(unittest.TestCase):
         rpc_index = next(index for index, call in enumerate(supabase.calls) if call[1] == "rpc")
         first_table_index = next(index for index, call in enumerate(supabase.calls) if call[1] == "table")
         self.assertLess(rpc_index, first_table_index)
-        self.assertFalse(any(call[1] in {"insert", "update", "upsert"} for call in supabase.calls))
+        feedback_inserts = [call for call in supabase.calls if call[0] == "style_feedback" and call[1] == "insert"]
+        self.assertEqual(len(feedback_inserts), 1)
 
     def test_feedback_helper_rejects_feedback_without_history(self):
         supabase = FakeSupabase()
@@ -418,6 +423,7 @@ class PersistenceTests(unittest.TestCase):
                 "style_tags": [[], [], []],
                 "email_history": [[], [], []],
                 "persona_snapshots": [[], [], []],
+                "style_feedback": [[], [], []],
             }
         )
 
@@ -430,7 +436,7 @@ class PersistenceTests(unittest.TestCase):
 
         rpc_calls = [call for call in supabase.calls if call[1] == "rpc"]
         self.assertEqual([call[2][0]["p_rating"] for call in rpc_calls], ["good", "good", "off"])
-        self.assertFalse(any(call[1] in {"insert", "update", "upsert"} for call in supabase.calls))
+        self.assertEqual(len([call for call in supabase.calls if call[0] == "style_feedback" and call[1] == "insert"]), 3)
 
     def test_style_aggregate_returns_snapshots_and_complete_history(self):
         profile = update_profile_from_feedback(

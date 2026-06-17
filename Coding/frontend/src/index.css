@@ -1757,6 +1757,113 @@ a:focus-visible {
   margin: 0 auto;
 }
 
+/* FRONTEND ENGINEER: Rebuilt Style Profile uses the requested dark client-persona dashboard palette. */
+.style-page-rebuild {
+  gap: 18px;
+  padding-bottom: 40px;
+  color: #f8fafc;
+}
+
+.style-page-rebuild .style-card,
+.style-profile-hero {
+  background:
+    radial-gradient(circle at 16% 0%, rgba(74, 222, 128, 0.08), transparent 34%),
+    linear-gradient(145deg, #171717, #101010);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
+}
+
+.style-profile-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: center;
+  min-height: 260px;
+  padding: clamp(28px, 4vw, 52px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+}
+
+.style-profile-hero h2 {
+  max-width: 780px;
+  margin: 10px 0 12px;
+  color: #fff;
+  font-size: clamp(42px, 5vw, 56px);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+}
+
+.style-profile-hero p {
+  max-width: 760px;
+  margin: 0 0 20px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: 1.65;
+}
+
+.profile-ring-panel,
+.profile-ring {
+  display: grid;
+  place-items: center;
+}
+
+.profile-ring-panel {
+  gap: 10px;
+  min-width: 154px;
+}
+
+.profile-ring-panel small {
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 11px;
+  text-align: center;
+}
+
+.profile-ring {
+  position: relative;
+  width: 128px;
+  height: 128px;
+}
+
+.profile-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.profile-ring-track,
+.profile-ring-progress {
+  fill: none;
+  stroke-width: 9;
+}
+
+.profile-ring-track {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.profile-ring-progress {
+  stroke: #4ade80;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.35));
+}
+
+.profile-ring strong {
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.profile-ring span {
+  margin-top: 30px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
 .style-page-history {
   min-height: calc(100dvh - 156px);
 }
@@ -1859,6 +1966,19 @@ a:focus-visible {
   overflow: visible;
 }
 
+.persona-node-group {
+  cursor: pointer;
+  outline: none;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.persona-node-group:focus .persona-node,
+.persona-node-group:hover .persona-node {
+  stroke: #4ade80;
+  filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.45));
+}
+
 .persona-orbit {
   fill: none;
   stroke: var(--border);
@@ -1919,6 +2039,193 @@ a:focus-visible {
   font-size: 16px;
   font-weight: 900;
   letter-spacing: 0.04em;
+}
+
+.persona-core-label {
+  fill: rgba(255, 255, 255, 0.56);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.trait-drawer {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: min(300px, calc(100% - 40px));
+  padding: 18px;
+  background: rgba(9, 9, 9, 0.92);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.trait-drawer > button {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 22px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.trait-drawer h3 {
+  margin: 9px 0 8px;
+  color: #fff;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.trait-drawer p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.trait-sparkline {
+  display: flex;
+  align-items: end;
+  gap: 7px;
+  height: 70px;
+  margin: 16px 0;
+}
+
+.trait-sparkline span {
+  width: 100%;
+  background: linear-gradient(180deg, #4ade80, rgba(74, 222, 128, 0.18));
+  border-radius: 999px;
+}
+
+.drawer-note {
+  color: rgba(255, 255, 255, 0.44) !important;
+}
+
+.sticky-strength-card {
+  display: grid;
+  gap: 16px;
+}
+
+.feedback-impact-card ul {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feedback-impact-card li {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+}
+
+.feedback-impact-card li span {
+  color: #4ade80;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.feedback-impact-card li p,
+.feedback-impact-card > p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.trait-breakdown-section {
+  overflow: visible;
+}
+
+.trait-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.trait-breakdown-card {
+  min-height: 178px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+}
+
+.trait-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trait-card-topline span {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.confidence-dot {
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+}
+
+.confidence-dot.medium {
+  background: #fff;
+}
+
+.confidence-dot.high {
+  background: #4ade80;
+  box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.09);
+}
+
+.trait-breakdown-card > strong {
+  display: block;
+  margin-top: 18px;
+  color: #4ade80;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.trait-score-bar {
+  height: 7px;
+  margin-top: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+}
+
+.trait-score-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.75), #4ade80);
+  border-radius: inherit;
+}
+
+.trait-breakdown-card p {
+  margin: 13px 0 0;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.trait-breakdown-card small {
+  display: block;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* FRONTEND: Summary and strength translate profile JSON into approachable product language. */
@@ -2176,6 +2483,11 @@ a:focus-visible {
   -webkit-line-clamp: 4;
 }
 
+.email-compare p.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
 .email-rewrite p {
   color: var(--text);
 }
@@ -2199,6 +2511,7 @@ a:focus-visible {
 
 .history-feedback > div {
   display: flex;
+  flex-wrap: wrap;
   gap: 5px;
 }
 
@@ -2248,6 +2561,41 @@ a:focus-visible {
   color: #67d9a3;
   font-size: 10px;
   border-top: 1px solid var(--border);
+}
+
+.manual-edit-box {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(74, 222, 128, 0.045);
+  border: 1px solid rgba(74, 222, 128, 0.14);
+  border-radius: 12px;
+}
+
+.manual-edit-box textarea {
+  min-height: 116px;
+  resize: vertical;
+  padding: 12px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.55;
+  background: var(--page-bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  outline: none;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.manual-edit-box textarea:focus {
+  border-color: rgba(74, 222, 128, 0.45);
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.08);
+}
+
+.manual-edit-box > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* FRONTEND: Loading, error, and empty treatments keep profile states legible without fabricated data. */
@@ -2485,12 +2833,17 @@ a:focus-visible {
   }
 
   /* FRONTEND: Collapse the profile hero before the map or summary becomes cramped. */
+  .style-profile-hero,
   .style-hero-grid {
     grid-template-columns: 1fr;
   }
 
   .style-side-stack {
     grid-template-columns: minmax(0, 1fr) minmax(280px, 0.75fr);
+  }
+
+  .trait-breakdown-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .persona-summary-card {
@@ -2502,6 +2855,24 @@ a:focus-visible {
   /* REDESIGN: [CHANGED] The animated visual becomes a background layer behind the mobile form. */
   .auth-page {
     overflow-x: clip;
+  }
+
+  .style-profile-hero {
+    padding: 24px;
+  }
+
+  .style-profile-hero h2 {
+    font-size: 38px;
+  }
+
+  .profile-ring-panel {
+    justify-self: start;
+  }
+
+  .style-side-stack,
+  .trait-breakdown-grid,
+  .email-compare {
+    grid-template-columns: 1fr;
   }
 
   .auth-topbar {

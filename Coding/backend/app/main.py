@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -31,6 +32,10 @@ ALLOWED_PROFILE_KEYS = {
     "stats",
     "preferences",
     "persona",
+    "persona_label",
+    "persona_summary",
+    "profile_completeness",
+    "emails_analyzed",
     "guidance",
     "recent_examples",
     "traits",
@@ -62,6 +67,12 @@ HEDGING_MARKERS = {
 }
 FIRST_PERSON_MARKERS = {"i", "me", "my", "mine", "we", "us", "our", "ours"}
 SECOND_PERSON_MARKERS = {"you", "your", "yours"}
+EMPATHY_MARKERS = {"understand", "appreciate", "recognize", "know this is", "thanks for your patience"}
+URGENCY_MARKERS = {"today", "asap", "urgent", "by end of day", "before friday", "deadline", "soon"}
+DEFERENCE_MARKERS = {"no rush", "whenever", "if it is not too much trouble", "when you get a chance"}
+RECIPROCITY_MARKERS = {"i can", "we can", "happy to", "let me know what you need", "i will send"}
+HUMOR_MARKERS = {"haha", "lol", "🙂", ":)", "funny", "kidding"}
+FILLER_PHRASES = {"just", "actually", "honestly", "as per", "hope this finds you well", "touch base"}
 
 
 class RewriteRequest(BaseModel):
@@ -114,10 +125,13 @@ class LearnRequest(BaseModel):
     final_version: str = Field(min_length=1, max_length=MAX_FINAL_CHARS)
 
 
-# AI PIPELINE: Feedback is deliberately categorical so confidence changes remain predictable.
+# AI PIPELINE: Feedback supports simple ratings and manual edited rewrites for delta learning.
 class StyleFeedbackRequest(BaseModel):
-    rating: Literal["good", "off"]
+    rating: Literal["good", "off", "edited"]
     history_id: int | None = Field(default=None, ge=1)
+    manual_edit: str | None = Field(default=None, max_length=MAX_FINAL_CHARS)
+    trait_affected: str | None = Field(default=None, max_length=80)
+    user_note: str | None = Field(default=None, max_length=1000)
 
 
 class StressTestRequest(BaseModel):
@@ -614,6 +628,79 @@ def build_rewrite_prompt(payload: RewriteRequest, style_profile: dict) -> str:
     )
 
 
+def build_style_extraction_prompt(payload: LearnRequest) -> str:
+    # AI PIPELINE ENGINEER: The model scores style dimensions as JSON; email text remains delimited as untrusted data.
+    return (
+        "Analyze the professional email writing style in the final approved version. "
+        "Return JSON only. Scores must be numbers from 0 to 1. Include traits for: "
+        "formality, warmth, confidence, directness, empathy, urgency, vocabulary_richness, "
+        "active_voice_ratio, humor_presence, contraction_usage, deference_markers, reciprocity. "
+        "Also include persona_label as two words and persona_summary as 2 concise sentences.\n"
+        "Schema: {\"traits\":{\"formality\":{\"score\":0.5},\"warmth\":{\"score\":0.5}},"
+        "\"persona_label\":\"Confident Collaborator\",\"persona_summary\":\"...\"}\n\n"
+        f"{build_untrusted_block('approved_email', payload.final_version, MAX_FINAL_CHARS)}"
+    )
+
+
+def parse_json_object(text: str) -> dict:
+    # AI PIPELINE ENGINEER: Accept strict JSON or a single fenced JSON object without trusting prose.
+    cleaned = text.strip()
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL | re.I)
+    if fenced:
+        cleaned = fenced.group(1)
+    if not cleaned.startswith("{"):
+        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+        cleaned = match.group(0) if match else cleaned
+    parsed = json.loads(cleaned)
+    return parsed if isinstance(parsed, dict) else {}
+
+
+async def extract_style_traits_with_llm(payload: LearnRequest) -> dict:
+    # AI PIPELINE ENGINEER: LLM extraction is additive; deterministic learning remains the fallback path.
+    prompt = build_style_extraction_prompt(payload)
+    system_context = (
+        "You are a strict writing-style feature extractor for professional email. "
+        "Return only compact JSON matching the requested schema. Do not rewrite the email."
+    )
+    raw = await call_llm_rewrite(prompt, resolve_model_name(), 1400, system_context)
+    return parse_json_object(raw)
+
+
+def merge_llm_style_extraction(profile: dict, extraction: dict) -> dict:
+    # AI PIPELINE ENGINEER: LLM scores nudge deterministic traits but cannot replace the profile shape.
+    if not isinstance(extraction, dict):
+        return profile
+    merged = dict(profile or {})
+    traits = dict(merged.get("traits") or {})
+    stats = dict(merged.get("stats") or {})
+    previous_examples = max(0, int(stats.get("learned_examples") or 1) - 1)
+    confidence = _confidence_from_count(int(stats.get("learned_examples") or 1))
+    for name, trait in (extraction.get("traits") or {}).items():
+        if not isinstance(trait, dict) or "score" not in trait:
+            continue
+        try:
+            incoming_score = float(trait.get("score"))
+        except (TypeError, ValueError):
+            continue
+        if name not in traits or not isinstance(traits.get(name), dict):
+            traits[name] = _scored_trait(incoming_score, confidence, "new")
+            continue
+        merged_score, score_trend = _merge_dimension_score(traits, name, incoming_score, previous_examples)
+        next_trait = dict(traits[name])
+        next_trait["score"] = merged_score
+        next_trait["confidence"] = max(float(next_trait.get("confidence") or 0), confidence)
+        next_trait["trend"] = score_trend
+        next_trait["source"] = "deterministic+llm"
+        traits[name] = next_trait
+    if isinstance(extraction.get("persona_label"), str) and extraction["persona_label"].strip():
+        merged["persona_label"] = extraction["persona_label"].strip()[:60]
+    if isinstance(extraction.get("persona_summary"), str) and extraction["persona_summary"].strip():
+        merged["persona_summary"] = extraction["persona_summary"].strip()[:600]
+    merged["traits"] = traits
+    merged["profile_completeness"] = profile_completeness(merged)
+    return merged
+
+
 def call_anthropic(prompt: str, model_name: str, max_tokens: int, system_context: str = "") -> str:
     # AI PIPELINE: Anthropic receives the bounded derived profile at system level.
     client = get_anthropic()
@@ -791,6 +878,159 @@ def _score_formality(signals: dict) -> float:
     return round(_clamp(score, 0.0, 1.0), 3)
 
 
+def _score_warmth(signals: dict) -> float:
+    score = 0.28
+    score += 0.18 if signals["uses_greeting"] == "used" else 0
+    score += 0.16 if signals["uses_signoff"] == "used" else 0
+    score += min(0.2, signals["politeness_ratio"] * 3)
+    score += min(0.16, signals["empathy_ratio"] * 4)
+    score += 0.08 if signals["exclamation_count"] else 0
+    return round(_clamp(score, 0.0, 1.0), 3)
+
+
+def _score_confidence(signals: dict) -> float:
+    score = 0.68
+    score -= min(0.28, signals["hedging_ratio"] * 4)
+    score -= min(0.18, signals["deference_ratio"] * 5)
+    score += min(0.14, signals["direct_ask_ratio"] * 4)
+    score += 0.06 if signals["active_voice_ratio"] >= 0.65 else -0.04
+    return round(_clamp(score, 0.0, 1.0), 3)
+
+
+def _score_directness(signals: dict) -> float:
+    score = 0.5
+    score += min(0.22, signals["direct_ask_ratio"] * 5)
+    score += 0.08 if signals["ask_position"] == "front-loaded" else -0.04
+    score -= min(0.2, signals["deference_ratio"] * 5)
+    score -= min(0.14, signals["hedging_ratio"] * 3)
+    return round(_clamp(score, 0.0, 1.0), 3)
+
+
+def _score_urgency(signals: dict) -> float:
+    score = min(0.7, signals["urgency_ratio"] * 8)
+    score += 0.16 if signals["question_count"] and signals["ask_position"] == "front-loaded" else 0
+    return round(_clamp(score, 0.0, 1.0), 3)
+
+
+def _confidence_from_count(count: int, evidence_weight: float = 1.0) -> float:
+    # AI PIPELINE ENGINEER: Confidence grows logarithmically so early emails matter without letting one sample dominate.
+    return round(_clamp((1 - math.exp(-max(0, count) / 5)) * evidence_weight, 0.0, 1.0), 3)
+
+
+def _trend(previous_score, next_score: float, threshold: float = 0.04) -> str:
+    if previous_score is None:
+        return "new"
+    delta = next_score - float(previous_score)
+    if delta > threshold:
+        return "increasing"
+    if delta < -threshold:
+        return "shifting"
+    return "stable"
+
+
+def _scored_trait(score: float, confidence: float, trend: str, **extra) -> dict:
+    trait = {
+        "score": round(_clamp(score, 0.0, 1.0), 3),
+        "confidence": round(_clamp(confidence, 0.0, 1.0), 3),
+        "weight": round(_clamp(float(extra.pop("weight", 1.0)), 0.1, 1.5), 3),
+        "trend": trend,
+    }
+    trait.update(extra)
+    return trait
+
+
+def _list_trait(items: list, confidence: float, **extra) -> dict:
+    trait = {
+        "detected": items[:12],
+        "confidence": round(_clamp(confidence, 0.0, 1.0), 3),
+        "weight": round(_clamp(float(extra.pop("weight", 1.0)), 0.1, 1.5), 3),
+    }
+    trait.update(extra)
+    return trait
+
+
+def _detect_ask_position(lower_text: str) -> str:
+    markers = ["please", "can you", "could you", "would you", "let me know", "send", "share", "review"]
+    positions = [lower_text.find(marker) for marker in markers if lower_text.find(marker) >= 0]
+    if not positions:
+        return "none"
+    first_position = min(positions)
+    ratio = first_position / max(1, len(lower_text))
+    if ratio <= 0.25:
+        return "front-loaded"
+    if ratio >= 0.65:
+        return "build-up"
+    return "mid-email"
+
+
+def _passive_voice_ratio(lower_text: str, sentence_count: int) -> float:
+    passive_hits = len(re.findall(r"\b(?:is|are|was|were|be|been|being)\s+\w+(?:ed|en)\b", lower_text))
+    return round(_clamp(passive_hits / max(1, sentence_count), 0.0, 1.0), 3)
+
+
+def _existing_score(traits: dict, name: str):
+    trait = traits.get(name) or {}
+    if isinstance(trait, dict) and "score" in trait:
+        try:
+            return float(trait.get("score"))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _merge_dimension_score(traits: dict, name: str, new_score: float, previous_examples: int) -> tuple[float, str]:
+    previous_score = _existing_score(traits, name)
+    if previous_score is None:
+        return round(_clamp(new_score, 0.0, 1.0), 3), "new"
+    weight = 1 / (1 + max(0, previous_examples))
+    merged = (previous_score * (1 - weight)) + (new_score * weight)
+    return round(_clamp(merged, 0.0, 1.0), 3), _trend(previous_score, merged)
+
+
+def _frequency_label(ratio: float) -> str:
+    if ratio >= 0.055:
+        return "high"
+    if ratio >= 0.02:
+        return "moderate"
+    return "low"
+
+
+def _punctuation_personality(signals: dict) -> dict:
+    counts = {
+        "clean": max(0, signals["sentence_count"] - signals["dash_count"] - signals["ellipsis_count"] - signals["exclamation_count"]),
+        "dash-user": signals["dash_count"],
+        "question-led": signals["question_count"],
+        "expressive": signals["exclamation_count"],
+        "ellipsis-user": signals["ellipsis_count"],
+    }
+    ordered = [name for name, _ in sorted(counts.items(), key=lambda item: item[1], reverse=True)]
+    return {"dominant": ordered[0], "secondary": ordered[1] if len(ordered) > 1 else "clean"}
+
+
+def _build_persona_label(traits: dict) -> str:
+    confidence_score = float((traits.get("confidence") or {}).get("score") or 0)
+    warmth_score = float((traits.get("warmth") or {}).get("score") or 0)
+    directness_score = float((traits.get("directness") or {}).get("score") or 0)
+    formality_score = float((traits.get("formality") or {}).get("score") or 0)
+
+    first = "Confident" if confidence_score >= 0.68 else "Warm" if warmth_score >= 0.62 else "Thoughtful"
+    second = "Strategist" if directness_score >= 0.68 else "Collaborator" if warmth_score >= 0.52 else "Professional" if formality_score >= 0.62 else "Communicator"
+    return f"{first} {second}"
+
+
+def _build_persona_summary(traits: dict, preferences: dict) -> str:
+    label = _build_persona_label(traits)
+    formality = int(round(float((traits.get("formality") or {}).get("score") or 0) * 100))
+    warmth = int(round(float((traits.get("warmth") or {}).get("score") or 0) * 100))
+    directness = int(round(float((traits.get("directness") or {}).get("score") or 0) * 100))
+    rhythm = preferences.get("sentence_structure") or "balanced"
+    return (
+        f"You read as a {label.lower()}: {formality}% formal, {warmth}% warm, and {directness}% direct. "
+        f"Your rhythm is {rhythm.replace('-', ' ')}, with {preferences.get('response_length_tendency', 'balanced')} responses "
+        "that preserve your intent without flattening your voice."
+    )
+
+
 def extract_style_signals(final_version: str) -> dict:
     words = re.findall(r"\b\w+\b", final_version)
     word_count = len(words)
@@ -816,11 +1056,20 @@ def extract_style_signals(final_version: str) -> dict:
     contraction_ratio = (len(contractions) / word_count) if word_count else 0.0
     politeness_count = _count_marker_hits(lower, POLITENESS_MARKERS)
     hedging_count = _count_marker_hits(lower, HEDGING_MARKERS)
+    empathy_count = _count_marker_hits(lower, EMPATHY_MARKERS)
+    urgency_count = _count_marker_hits(lower, URGENCY_MARKERS)
+    deference_count = _count_marker_hits(lower, DEFERENCE_MARKERS)
+    reciprocity_count = _count_marker_hits(lower, RECIPROCITY_MARKERS)
+    humor_count = _count_marker_hits(lower, HUMOR_MARKERS)
+    filler_hits = [phrase for phrase in FILLER_PHRASES if re.search(rf"\b{re.escape(phrase)}\b", lower)]
     first_person_count = sum(word in FIRST_PERSON_MARKERS for word in lower_words)
     second_person_count = sum(word in SECOND_PERSON_MARKERS for word in lower_words)
     paragraph_count = len([chunk for chunk in re.split(r"\n\s*\n", final_version.strip()) if chunk.strip()])
     bullet_count = len(re.findall(r"(?m)^\s*(?:[-*•]|\d+[.)])\s+", final_version))
     punctuation_total = sum(final_version.count(mark) for mark in [".", "!", "?", ",", ";", ":"])
+    passive_ratio = _passive_voice_ratio(lower, sentence_count)
+    ask_position = _detect_ask_position(lower)
+    direct_ask_count = 0 if ask_position == "none" else 1
     signals = {
         "word_count": word_count,
         "sentence_count": sentence_count,
@@ -844,14 +1093,33 @@ def extract_style_signals(final_version: str) -> dict:
         "politeness_ratio": round((politeness_count / word_count) if word_count else 0.0, 3),
         "hedging_count": hedging_count,
         "hedging_ratio": round((hedging_count / word_count) if word_count else 0.0, 3),
+        "empathy_count": empathy_count,
+        "empathy_ratio": round((empathy_count / word_count) if word_count else 0.0, 3),
+        "urgency_count": urgency_count,
+        "urgency_ratio": round((urgency_count / word_count) if word_count else 0.0, 3),
+        "deference_count": deference_count,
+        "deference_ratio": round((deference_count / word_count) if word_count else 0.0, 3),
+        "reciprocity_count": reciprocity_count,
+        "reciprocity_ratio": round((reciprocity_count / word_count) if word_count else 0.0, 3),
+        "humor_count": humor_count,
+        "humor_ratio": round((humor_count / word_count) if word_count else 0.0, 3),
+        "filler_phrases": filler_hits,
         "first_person_ratio": round((first_person_count / word_count) if word_count else 0.0, 3),
         "second_person_ratio": round((second_person_count / word_count) if word_count else 0.0, 3),
         "paragraph_count": paragraph_count,
         "bullet_count": bullet_count,
         "punctuation_density": round((punctuation_total / word_count) if word_count else 0.0, 3),
+        "active_voice_ratio": round(1 - passive_ratio, 3),
+        "passive_voice_ratio": passive_ratio,
+        "ask_position": ask_position,
+        "direct_ask_ratio": round((direct_ask_count / max(1, sentence_count)), 3),
         "is_very_short": word_count < 6,
     }
     signals["formality_score"] = _score_formality(signals)
+    signals["warmth_score"] = _score_warmth(signals)
+    signals["confidence_score"] = _score_confidence(signals)
+    signals["directness_score"] = _score_directness(signals)
+    signals["urgency_score"] = _score_urgency(signals)
     signals["response_length_tendency"] = _length_tendency(word_count)
     signals["sentence_structure"] = _sentence_structure(signals["avg_sentence_length"], sentence_count)
     return signals
@@ -992,6 +1260,67 @@ def update_profile_from_feedback(existing: dict, payload: LearnRequest) -> dict:
             float((traits.get(key) or {}).get("weight") or 1.0),
         )
 
+    dimension_confidence = _confidence_from_count(prior_count + 1, evidence_weight)
+    for name, score in {
+        "formality": signals["formality_score"],
+        "warmth": signals["warmth_score"],
+        "confidence": signals["confidence_score"],
+        "vocabulary_richness": signals["vocabulary_richness"],
+        "active_voice_ratio": signals["active_voice_ratio"],
+        "directness": signals["directness_score"],
+        "urgency": signals["urgency_score"],
+        "empathy": min(1.0, signals["empathy_ratio"] * 6),
+        "reciprocity": min(1.0, signals["reciprocity_ratio"] * 6),
+        "humor_presence": min(1.0, signals["humor_ratio"] * 8),
+        "contraction_usage": min(1.0, signals["contraction_ratio"] * 10),
+        "deference_markers": min(1.0, signals["deference_ratio"] * 8),
+    }.items():
+        merged_score, score_trend = _merge_dimension_score(traits, name, score, prior_count)
+        traits[name] = _scored_trait(
+            merged_score,
+            max(float((traits.get(name) or {}).get("confidence") or 0), dimension_confidence),
+            score_trend,
+            weight=float((traits.get(name) or {}).get("weight") or 1.0),
+        )
+
+    traits["avg_length"] = {
+        "words": round(current["avg_word_count"], 2),
+        "sentences": signals["sentence_count"],
+        "confidence": dimension_confidence,
+        "weight": float((traits.get("avg_length") or {}).get("weight") or 1.0),
+        "trend": _trend((traits.get("avg_length") or {}).get("words"), current["avg_word_count"], threshold=8),
+    }
+    traits["filler_phrases"] = _list_trait(
+        signals["filler_phrases"],
+        dimension_confidence,
+        frequency=_frequency_label(len(signals["filler_phrases"]) / max(1, signals["word_count"])),
+        weight=float((traits.get("filler_phrases") or {}).get("weight") or 1.0),
+    )
+    traits["opening_pattern"] = {
+        "type": "greeting-first" if signals["uses_greeting"] == "used" else signals["ask_position"],
+        "confidence": dimension_confidence,
+        "weight": float((traits.get("opening_pattern") or {}).get("weight") or 1.0),
+        "trend": "stable" if traits.get("opening_pattern") else "new",
+    }
+    traits["closing_pattern"] = {
+        "type": "warm-sign-off" if signals["uses_signoff"] == "used" else "minimal",
+        "confidence": dimension_confidence,
+        "weight": float((traits.get("closing_pattern") or {}).get("weight") or 1.0),
+        "trend": "stable" if traits.get("closing_pattern") else "new",
+    }
+    traits["punctuation_personality"] = {
+        **_punctuation_personality(signals),
+        "confidence": dimension_confidence,
+        "weight": float((traits.get("punctuation_personality") or {}).get("weight") or 1.0),
+        "trend": "stable" if traits.get("punctuation_personality") else "new",
+    }
+    traits["ask_placement"] = {
+        "type": signals["ask_position"],
+        "confidence": dimension_confidence,
+        "weight": float((traits.get("ask_placement") or {}).get("weight") or 1.0),
+        "trend": "stable" if traits.get("ask_placement") else "new",
+    }
+
     # AI PIPELINE: Track language shifts explicitly and lower certainty while the new language gathers evidence.
     language_observations = dict(profile.get("language_observations") or {})
     previous_language = language_observations.get("primary")
@@ -1083,6 +1412,10 @@ def update_profile_from_feedback(existing: dict, payload: LearnRequest) -> dict:
         "energy": energy,
         "traits": persona_traits,
     }
+    profile["persona_label"] = _build_persona_label(traits)
+    profile["persona_summary"] = _build_persona_summary(traits, current)
+    profile["profile_completeness"] = profile_completeness(profile)
+    profile["emails_analyzed"] = learned_examples
     profile["guidance"] = guidance
     profile["style_tags"] = derive_style_tags(profile)
     profile["recent_examples"] = _append_limited(list(profile.get("recent_examples") or []), history_entry, max_items=20)
@@ -1115,6 +1448,10 @@ def derive_style_tags(profile: dict) -> list[str]:
         tags.append("polite")
     if float(preferences.get("hedging_ratio") or 0) >= 0.04:
         tags.append("softens-requests")
+    for name in ("warmth", "confidence", "directness", "active_voice_ratio", "humor_presence"):
+        trait = (profile.get("traits") or {}).get(name) or {}
+        if isinstance(trait, dict) and float(trait.get("score") or 0) >= 0.65:
+            tags.append(name.replace("_", "-"))
     language = (profile.get("language_observations") or {}).get("primary")
     if language and language != "unknown":
         tags.append(f"language-{language}")
@@ -1139,6 +1476,17 @@ def profile_completeness(profile: dict) -> float:
         "politeness_markers",
         "hedging_tendency",
         "pronoun_focus",
+        "formality",
+        "warmth",
+        "confidence",
+        "active_voice_ratio",
+        "directness",
+        "empathy",
+        "urgency",
+        "humor_presence",
+        "contraction_usage",
+        "deference_markers",
+        "reciprocity",
     ]
     values = [float((traits.get(name) or {}).get("confidence") or 0.0) for name in required]
     return round(sum(values) / len(required), 4)
@@ -1242,10 +1590,11 @@ def finalize_email_history(
     return int(history_id)
 
 
-def save_profile_artifacts(supabase: Client, user_id: str, profile: dict) -> None:
+def save_profile_artifacts(supabase: Client, user_id: str, profile: dict, *, source_history_id: int | None = None) -> None:
     # AI PIPELINE: Save the synchronized profile, queryable tags, and immutable persona snapshot for one user.
     now = datetime.now(timezone.utc).isoformat()
     tags = derive_style_tags(profile)
+    completeness = profile_completeness(profile)
     (
         supabase.table("style_profiles")
         .upsert(
@@ -1253,6 +1602,10 @@ def save_profile_artifacts(supabase: Client, user_id: str, profile: dict) -> Non
                 "user_id": user_id,
                 "profile": profile,
                 "current_style": profile,
+                "persona_label": profile.get("persona_label") or _build_persona_label(profile.get("traits") or {}),
+                "persona_summary": profile.get("persona_summary") or _build_persona_summary(profile.get("traits") or {}, profile.get("preferences") or {}),
+                "profile_completeness": completeness,
+                "emails_analyzed": int(profile.get("emails_analyzed") or (profile.get("stats") or {}).get("learned_examples") or 0),
                 "updated_at": now,
                 "last_updated": now,
             },
@@ -1271,7 +1624,10 @@ def save_profile_artifacts(supabase: Client, user_id: str, profile: dict) -> Non
             {
                 "user_id": user_id,
                 "style": profile,
-                "completeness": profile_completeness(profile),
+                "completeness": completeness,
+                "source_history_id": source_history_id,
+                "persona_label": profile.get("persona_label") or _build_persona_label(profile.get("traits") or {}),
+                "persona_summary": profile.get("persona_summary") or "",
             }
         )
         .execute()
@@ -1311,7 +1667,7 @@ def get_style_data_for_user(supabase: Client, user_id: str) -> dict:
     # AI PIPELINE: Aggregate frontend style data through independently user-scoped service-role queries.
     profile_result = (
         supabase.table("style_profiles")
-        .select("profile,last_updated")
+        .select("profile,persona_label,persona_summary,profile_completeness,emails_analyzed,last_updated")
         .eq("user_id", user_id)
         .limit(1)
         .execute()
@@ -1337,22 +1693,113 @@ def get_style_data_for_user(supabase: Client, user_id: str) -> dict:
     snapshot_rows = _fetch_all_user_rows(
         supabase,
         "persona_snapshots",
-        "id,style,completeness,captured_at,created_at",
+        "id,style,completeness,source_history_id,persona_label,persona_summary,captured_at,created_at",
         user_id,
         order_column="captured_at",
         descending=False,
+    )
+    feedback_rows = _fetch_all_user_rows(
+        supabase,
+        "style_feedback",
+        "id,rewrite_id,feedback_type,trait_affected,user_note,manual_edit,metadata,created_at,updated_at",
+        user_id,
+        order_column="created_at",
+        descending=True,
     )
     profile_row = (profile_result.data or [{}])[0]
     tag_row = (tag_result.data or [{}])[0]
     profile = profile_row.get("profile") or {}
     return {
         "profile": profile,
+        "persona_label": profile_row.get("persona_label") or profile.get("persona_label"),
+        "persona_summary": profile_row.get("persona_summary") or profile.get("persona_summary"),
         "tags": tag_row.get("tags") or derive_style_tags(profile),
-        "completeness": profile_completeness(profile),
+        "completeness": profile_row.get("profile_completeness") or profile.get("profile_completeness") or profile_completeness(profile),
+        "emails_analyzed": profile_row.get("emails_analyzed") or profile.get("emails_analyzed") or (profile.get("stats") or {}).get("learned_examples", 0),
         "last_updated": profile_row.get("last_updated") or tag_row.get("updated_at"),
         "history": history_rows,
         "snapshots": snapshot_rows,
+        "feedback_events": feedback_rows,
     }
+
+
+def record_style_feedback_event(
+    supabase: Client,
+    user_id: str,
+    history_id: int,
+    payload: StyleFeedbackRequest,
+    *,
+    metadata: dict | None = None,
+) -> None:
+    # AI PIPELINE ENGINEER: Public feedback events power the impact summary and edited-feedback learning audit trail.
+    supabase.table("style_feedback").insert(
+        {
+            "user_id": user_id,
+            "rewrite_id": history_id,
+            "feedback_type": payload.rating,
+            "trait_affected": payload.trait_affected,
+            "user_note": payload.user_note,
+            "manual_edit": payload.manual_edit if payload.rating == "edited" else None,
+            "metadata": metadata or {},
+        }
+    ).execute()
+
+
+def apply_edited_style_feedback(supabase: Client, user_id: str, payload: StyleFeedbackRequest) -> dict:
+    # AI PIPELINE ENGINEER: Manual edits become a new learning sample based on the rewrite-to-edit delta.
+    if payload.history_id is None:
+        raise HTTPException(status_code=422, detail="A history entry is required for style feedback.")
+    if not payload.manual_edit or not payload.manual_edit.strip():
+        raise HTTPException(status_code=422, detail="Manual edited feedback requires edited text.")
+
+    history_result = (
+        supabase.table("email_history")
+        .select("id,original_text,generated_rewrite,feedback,influenced_traits")
+        .eq("user_id", user_id)
+        .eq("id", payload.history_id)
+        .limit(1)
+        .execute()
+    )
+    rows = history_result.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Email history entry not found.")
+
+    history = rows[0]
+    current_profile = get_profile_for_user(user_id)
+    learn_payload = LearnRequest(
+        mode=str((history.get("feedback") or {}).get("mode") or "fix_grammar"),
+        draft=history.get("original_text") or payload.manual_edit,
+        ai_output=history.get("generated_rewrite") or payload.manual_edit,
+        final_version=payload.manual_edit.strip(),
+    )
+    next_profile = update_profile_from_feedback(current_profile, learn_payload)
+    traits = dict(next_profile.get("traits") or {})
+    for name in history.get("influenced_traits") or []:
+        if name in traits and isinstance(traits[name], dict):
+            traits[name]["confidence"] = round(_clamp(float(traits[name].get("confidence") or 0) - 0.04, 0.0, 1.0), 3)
+            traits[name]["recalibration"] = "manual-edit"
+    next_profile["traits"] = traits
+    next_profile["profile_completeness"] = profile_completeness(next_profile)
+
+    feedback = dict(history.get("feedback") or {})
+    feedback["style_rating"] = "edited"
+    feedback["manual_edit_updated_at"] = datetime.now(timezone.utc).isoformat()
+    supabase.table("email_history").update(
+        {
+            "final_version": payload.manual_edit.strip(),
+            "feedback": feedback,
+            "influenced_traits": sorted(traits.keys()),
+        }
+    ).eq("user_id", user_id).eq("id", payload.history_id).execute()
+    save_profile_artifacts(supabase, user_id, next_profile, source_history_id=payload.history_id)
+    record_style_feedback_event(
+        supabase,
+        user_id,
+        payload.history_id,
+        payload,
+        metadata={"adjustment": "manual_edit_delta", "traits_recalibrated": history.get("influenced_traits") or []},
+    )
+    return get_style_data_for_user(supabase, user_id)
 
 
 def apply_style_feedback(
@@ -1363,6 +1810,8 @@ def apply_style_feedback(
     # FIXER: [CHANGED] One database RPC owns row authorization, trait-scoped transitions, and all feedback writes.
     if payload.history_id is None:
         raise HTTPException(status_code=422, detail="A history entry is required for style feedback.")
+    if payload.rating == "edited":
+        return apply_edited_style_feedback(supabase, user_id, payload)
 
     try:
         result = (
@@ -1406,6 +1855,13 @@ def apply_style_feedback(
     if not isinstance(rpc_data, dict):
         raise RuntimeError("Style feedback RPC returned an invalid aggregate.")
 
+    record_style_feedback_event(
+        supabase,
+        user_id,
+        payload.history_id,
+        payload,
+        metadata={"rpc_changed": rpc_data.get("changed") if isinstance(rpc_data, dict) else None},
+    )
     # FIXER: [CHANGED] Persistence stays atomic while the API returns the complete aggregate its UI contract promises.
     return get_style_data_for_user(supabase, user_id)
 
@@ -1651,6 +2107,11 @@ async def learn_from_user_edit(payload: LearnRequest, current_user: dict = Depen
     try:
         current_profile = await get_profile_for_user_async(user_id)
         next_profile = update_profile_from_feedback(current_profile, payload)
+        try:
+            llm_extraction = await extract_style_traits_with_llm(payload)
+            next_profile = merge_llm_style_extraction(next_profile, llm_extraction)
+        except Exception as exc:
+            logger.warning("LLM style extraction fell back to deterministic profile: %s", exc.__class__.__name__)
         signals = extract_style_signals(payload.final_version)
         persona = next_profile.get("persona") or {}
         influenced_traits = sorted((next_profile.get("traits") or {}).keys())
@@ -1661,6 +2122,7 @@ async def learn_from_user_edit(payload: LearnRequest, current_user: dict = Depen
             supabase,
             user_id,
             next_profile,
+            source_history_id=None,
         )
         history_id = await run_blocking_io(
             finalize_email_history,
