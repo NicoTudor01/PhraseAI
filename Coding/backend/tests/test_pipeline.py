@@ -132,13 +132,36 @@ class PipelineTests(unittest.TestCase):
             "preferred_closers",
             "top_recurring_phrases",
             "language",
+            "formality_score",
+            "response_length_tendency",
+            "sentence_structure",
+            "politeness_markers",
+            "hedging_tendency",
+            "pronoun_focus",
         }
         self.assertTrue(required.issubset(profile["traits"]))
+        self.assertIn("polite phrasing", profile["persona"]["traits"])
+        self.assertEqual(profile["preferences"]["response_length_tendency"], "brief")
+        self.assertEqual(profile["preferences"]["sentence_structure"], "short-direct")
+        self.assertIn("polite", profile["style_tags"])
         self.assertGreater(
             profile["traits"]["average_sentence_length"]["confidence"],
             first["traits"]["average_sentence_length"]["confidence"],
         )
         self.assertGreater(profile_completeness(profile), 0)
+
+    def test_style_signals_capture_deeper_persona_parameters(self):
+        signals = extract_style_signals(
+            "Hi Jordan,\n\nI think we can probably ship this today. "
+            "Please send your final notes when you can. Thanks!"
+        )
+
+        self.assertGreater(signals["formality_score"], 0)
+        self.assertGreater(signals["politeness_ratio"], 0)
+        self.assertGreater(signals["hedging_ratio"], 0)
+        self.assertGreater(signals["second_person_ratio"], 0)
+        self.assertEqual(signals["response_length_tendency"], "brief")
+        self.assertIn(signals["sentence_structure"], {"balanced", "short-direct"})
 
     def test_first_and_very_short_email_keep_low_bounded_confidence(self):
         payload = LearnRequest(

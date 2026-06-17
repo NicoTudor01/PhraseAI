@@ -41,6 +41,27 @@ RETRYABLE_PROVIDER_STATUSES = {429, 500, 502, 503, 504, 529}
 DEPRECATED_ANTHROPIC_MODEL_REPLACEMENTS = {
     "claude-sonnet-4-20250514": "claude-sonnet-4-6",
 }
+POLITENESS_MARKERS = {
+    "please",
+    "thank",
+    "thanks",
+    "appreciate",
+    "grateful",
+    "kindly",
+}
+HEDGING_MARKERS = {
+    "maybe",
+    "perhaps",
+    "just",
+    "possibly",
+    "probably",
+    "i think",
+    "i believe",
+    "if possible",
+    "when you can",
+}
+FIRST_PERSON_MARKERS = {"i", "me", "my", "mine", "we", "us", "our", "ours"}
+SECOND_PERSON_MARKERS = {"you", "your", "yours"}
 
 
 class RewriteRequest(BaseModel):
@@ -735,6 +756,41 @@ def _recurring_phrases(text: str) -> list[str]:
     return list(dict.fromkeys(phrases))[:12]
 
 
+def _count_marker_hits(lower_text: str, markers: set[str]) -> int:
+    # AI PIPELINE: Marker counts are deterministic style evidence, not content retention.
+    return sum(len(re.findall(rf"\b{re.escape(marker)}\b", lower_text)) for marker in markers)
+
+
+def _length_tendency(avg_words: float) -> str:
+    if avg_words >= 110:
+        return "long-form"
+    if avg_words >= 45:
+        return "moderate"
+    return "brief"
+
+
+def _sentence_structure(avg_sentence_length: float, sentence_count: int) -> str:
+    if sentence_count <= 1:
+        return "single-thought"
+    if avg_sentence_length >= 22:
+        return "long-compound"
+    if avg_sentence_length <= 10:
+        return "short-direct"
+    return "balanced"
+
+
+def _score_formality(signals: dict) -> float:
+    score = 0.55
+    score += 0.12 if signals["uses_signoff"] == "used" else -0.04
+    score += 0.08 if signals["uses_greeting"] == "used" else -0.03
+    score += 0.08 if signals["avg_sentence_length"] >= 16 else -0.04
+    score += 0.05 if signals["politeness_ratio"] >= 0.04 else 0
+    score -= 0.18 if signals["contraction_ratio"] >= 0.04 else 0
+    score -= 0.08 if signals["exclamation_count"] >= 2 else 0
+    score -= 0.06 if signals["hedging_ratio"] >= 0.05 else 0
+    return round(_clamp(score, 0.0, 1.0), 3)
+
+
 def extract_style_signals(final_version: str) -> dict:
     words = re.findall(r"\b\w+\b", final_version)
     word_count = len(words)
@@ -746,6 +802,7 @@ def extract_style_signals(final_version: str) -> dict:
     )
 
     lower = final_version.lower()
+    lower_words = [word.lower() for word in words]
     unique_ratio = (len({word.lower() for word in words}) / word_count) if word_count else 0.0
     opener, closer = _opening_and_closing(final_version)
     language, language_confidence = _detect_language(final_version)
@@ -757,7 +814,14 @@ def extract_style_signals(final_version: str) -> dict:
     )
 
     contraction_ratio = (len(contractions) / word_count) if word_count else 0.0
-    return {
+    politeness_count = _count_marker_hits(lower, POLITENESS_MARKERS)
+    hedging_count = _count_marker_hits(lower, HEDGING_MARKERS)
+    first_person_count = sum(word in FIRST_PERSON_MARKERS for word in lower_words)
+    second_person_count = sum(word in SECOND_PERSON_MARKERS for word in lower_words)
+    paragraph_count = len([chunk for chunk in re.split(r"\n\s*\n", final_version.strip()) if chunk.strip()])
+    bullet_count = len(re.findall(r"(?m)^\s*(?:[-*•]|\d+[.)])\s+", final_version))
+    punctuation_total = sum(final_version.count(mark) for mark in [".", "!", "?", ",", ";", ":"])
+    signals = {
         "word_count": word_count,
         "sentence_count": sentence_count,
         "avg_sentence_length": (word_count / sentence_count) if sentence_count else 0,
@@ -776,8 +840,21 @@ def extract_style_signals(final_version: str) -> dict:
         "recurring_phrases": _recurring_phrases(final_version),
         "language": language,
         "language_confidence": language_confidence,
+        "politeness_count": politeness_count,
+        "politeness_ratio": round((politeness_count / word_count) if word_count else 0.0, 3),
+        "hedging_count": hedging_count,
+        "hedging_ratio": round((hedging_count / word_count) if word_count else 0.0, 3),
+        "first_person_ratio": round((first_person_count / word_count) if word_count else 0.0, 3),
+        "second_person_ratio": round((second_person_count / word_count) if word_count else 0.0, 3),
+        "paragraph_count": paragraph_count,
+        "bullet_count": bullet_count,
+        "punctuation_density": round((punctuation_total / word_count) if word_count else 0.0, 3),
         "is_very_short": word_count < 6,
     }
+    signals["formality_score"] = _score_formality(signals)
+    signals["response_length_tendency"] = _length_tendency(word_count)
+    signals["sentence_structure"] = _sentence_structure(signals["avg_sentence_length"], sentence_count)
+    return signals
 
 
 def _trait(value, confidence: float, evidence_count: int, weight: float = 1.0) -> dict:
@@ -818,14 +895,39 @@ def update_profile_from_feedback(existing: dict, payload: LearnRequest) -> dict:
     old_contraction_ratio = float(current.get("contraction_ratio") or signals["contraction_ratio"])
     old_exclamations = float(current.get("avg_exclamation_count") or signals["exclamation_count"])
     old_vocabulary = float(current.get("vocabulary_richness") or signals["vocabulary_richness"])
+    old_word_count = float(current.get("avg_word_count") or signals["word_count"])
+    old_formality_score = float(current.get("formality_score") or signals["formality_score"])
+    old_politeness_ratio = float(current.get("politeness_ratio") or signals["politeness_ratio"])
+    old_hedging_ratio = float(current.get("hedging_ratio") or signals["hedging_ratio"])
+    old_first_person_ratio = float(current.get("first_person_ratio") or signals["first_person_ratio"])
+    old_second_person_ratio = float(current.get("second_person_ratio") or signals["second_person_ratio"])
+    old_punctuation_density = float(current.get("punctuation_density") or signals["punctuation_density"])
+    old_question_rate = float(current.get("question_rate") or signals["question_count"])
 
     alpha = 0.3 * evidence_weight
     current["avg_sentence_length"] = round((1 - alpha) * old_avg_sentence + alpha * signals["avg_sentence_length"], 2)
     current["contraction_ratio"] = round((1 - alpha) * old_contraction_ratio + alpha * signals["contraction_ratio"], 3)
     current["avg_exclamation_count"] = round((1 - alpha) * old_exclamations + alpha * signals["exclamation_count"], 2)
     current["vocabulary_richness"] = round((1 - alpha) * old_vocabulary + alpha * signals["vocabulary_richness"], 3)
+    current["avg_word_count"] = round((1 - alpha) * old_word_count + alpha * signals["word_count"], 2)
+    current["formality_score"] = round((1 - alpha) * old_formality_score + alpha * signals["formality_score"], 3)
+    current["politeness_ratio"] = round((1 - alpha) * old_politeness_ratio + alpha * signals["politeness_ratio"], 3)
+    current["hedging_ratio"] = round((1 - alpha) * old_hedging_ratio + alpha * signals["hedging_ratio"], 3)
+    current["first_person_ratio"] = round((1 - alpha) * old_first_person_ratio + alpha * signals["first_person_ratio"], 3)
+    current["second_person_ratio"] = round((1 - alpha) * old_second_person_ratio + alpha * signals["second_person_ratio"], 3)
+    current["punctuation_density"] = round((1 - alpha) * old_punctuation_density + alpha * signals["punctuation_density"], 3)
+    current["question_rate"] = round((1 - alpha) * old_question_rate + alpha * signals["question_count"], 3)
     current["prefers_greeting"] = signals["uses_greeting"]
     current["prefers_signoff"] = signals["uses_signoff"]
+    current["response_length_tendency"] = _length_tendency(current["avg_word_count"])
+    current["sentence_structure"] = _sentence_structure(current["avg_sentence_length"], signals["sentence_count"])
+    current["pronoun_focus"] = (
+        "audience-focused"
+        if current["second_person_ratio"] > current["first_person_ratio"] + 0.03
+        else "self-or-team-focused"
+        if current["first_person_ratio"] > current["second_person_ratio"] + 0.03
+        else "balanced"
+    )
     current["preferred_openers"] = _merge_ranked(current.get("preferred_openers") or [], [signals["preferred_opener"]])
     current["preferred_closers"] = _merge_ranked(current.get("preferred_closers") or [], [signals["preferred_closer"]])
     phrase_counts = dict(current.get("phrase_counts") or {})
@@ -841,14 +943,15 @@ def update_profile_from_feedback(existing: dict, payload: LearnRequest) -> dict:
     ][:10]
     current["punctuation_patterns"] = {
         "exclamations_per_email": current["avg_exclamation_count"],
-        "questions_per_email": signals["question_count"],
+        "questions_per_email": current["question_rate"],
         "commas_per_email": signals["comma_count"],
         "semicolons_per_email": signals["semicolon_count"],
         "dashes_per_email": signals["dash_count"],
         "ellipses_per_email": signals["ellipsis_count"],
+        "punctuation_density": current["punctuation_density"],
     }
 
-    formality = "casual" if current["contraction_ratio"] >= 0.04 else "formal" if current["contraction_ratio"] <= 0.015 else "balanced"
+    formality = "formal" if current["formality_score"] >= 0.66 else "casual" if current["formality_score"] <= 0.42 else "balanced"
     directness = "detailed" if current["avg_sentence_length"] >= 18 else "concise" if current["avg_sentence_length"] <= 12 else "balanced"
     energy = "high" if current["avg_exclamation_count"] >= 1 else "warm" if current["avg_exclamation_count"] >= 0.25 else "calm"
     prior_count = max(0, learned_examples - 1)
@@ -875,6 +978,12 @@ def update_profile_from_feedback(existing: dict, payload: LearnRequest) -> dict:
         ("preferred_openers", current["preferred_openers"]),
         ("preferred_closers", current["preferred_closers"]),
         ("top_recurring_phrases", current["top_recurring_phrases"]),
+        ("formality_score", current["formality_score"]),
+        ("response_length_tendency", current["response_length_tendency"]),
+        ("sentence_structure", current["sentence_structure"]),
+        ("politeness_markers", current["politeness_ratio"]),
+        ("hedging_tendency", current["hedging_ratio"]),
+        ("pronoun_focus", current["pronoun_focus"]),
     ]:
         traits[key] = _trait(
             value,
@@ -921,6 +1030,10 @@ def update_profile_from_feedback(existing: dict, payload: LearnRequest) -> dict:
         persona_traits.append("uses greetings")
     if current["prefers_signoff"] == "used":
         persona_traits.append("uses sign-offs")
+    if current["politeness_ratio"] >= 0.04:
+        persona_traits.append("polite phrasing")
+    if current["hedging_ratio"] >= 0.04:
+        persona_traits.append("softens requests")
     if not persona_traits:
         persona_traits.append("minimal openings/closings")
 
@@ -937,6 +1050,14 @@ def update_profile_from_feedback(existing: dict, payload: LearnRequest) -> dict:
         guidance.append("Use fuller, detailed sentences.")
     else:
         guidance.append("Keep sentences concise and direct.")
+    if current["politeness_ratio"] >= 0.04:
+        guidance.append("Include polite markers such as please, thanks, or appreciation when they fit.")
+    if current["hedging_ratio"] >= 0.04:
+        guidance.append("Soften requests lightly instead of making every ask blunt.")
+    if current["pronoun_focus"] == "audience-focused":
+        guidance.append("Frame benefits and next steps around the recipient.")
+    if current["response_length_tendency"] == "brief":
+        guidance.append("Prefer compact rewrites unless extra context is required.")
     if current["preferred_openers"]:
         guidance.append(f"Prefer openings such as: {', '.join(current['preferred_openers'][:3])}.")
     if current["preferred_closers"]:
@@ -981,6 +1102,19 @@ def derive_style_tags(profile: dict) -> list[str]:
         tags.append("uses-greetings")
     if preferences.get("prefers_signoff") == "used":
         tags.append("uses-signoffs")
+    length_tendency = preferences.get("response_length_tendency")
+    if length_tendency:
+        tags.append(f"length-{length_tendency}")
+    sentence_structure = preferences.get("sentence_structure")
+    if sentence_structure:
+        tags.append(f"structure-{sentence_structure}")
+    pronoun_focus = preferences.get("pronoun_focus")
+    if pronoun_focus:
+        tags.append(f"focus-{pronoun_focus}")
+    if float(preferences.get("politeness_ratio") or 0) >= 0.04:
+        tags.append("polite")
+    if float(preferences.get("hedging_ratio") or 0) >= 0.04:
+        tags.append("softens-requests")
     language = (profile.get("language_observations") or {}).get("primary")
     if language and language != "unknown":
         tags.append(f"language-{language}")
@@ -999,6 +1133,12 @@ def profile_completeness(profile: dict) -> float:
         "preferred_closers",
         "top_recurring_phrases",
         "language",
+        "formality_score",
+        "response_length_tendency",
+        "sentence_structure",
+        "politeness_markers",
+        "hedging_tendency",
+        "pronoun_focus",
     ]
     values = [float((traits.get(name) or {}).get("confidence") or 0.0) for name in required]
     return round(sum(values) / len(required), 4)

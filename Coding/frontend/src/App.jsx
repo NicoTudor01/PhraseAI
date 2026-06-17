@@ -7,6 +7,8 @@ import { validateRewriteResponse } from "./rewriteResponse";
 const API_URL = import.meta.env.DEV ? import.meta.env.VITE_API_URL || "/api" : "/api";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const AUTH_REDIRECT_ORIGIN = import.meta.env.VITE_AUTH_REDIRECT_URL || import.meta.env.VITE_PUBLIC_SITE_URL || "";
+const PRODUCTION_AUTH_ORIGIN = "https://phraseai-nico.vercel.app";
 const MAX_DRAFT_CHARS = 12000;
 const MAX_CONTEXT_CHARS = 8000;
 const IS_DEV = import.meta.env.DEV;
@@ -113,6 +115,30 @@ const AUTH_DETAILS_ITEM = {
   hidden: { opacity: 0, y: 26 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.58, ease: AUTH_EASE_OUT } },
 };
+const APP_SIDEBAR_MOTION = {
+  initial: { opacity: 0, x: -18 },
+  animate: { opacity: 1, x: 0 },
+  transition: { duration: 0.42, ease: AUTH_EASE_OUT },
+};
+const APP_HEADER_MOTION = {
+  initial: { opacity: 0, y: -14 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.42, delay: 0.08, ease: AUTH_EASE_OUT },
+};
+const APP_SECTION_MOTION = {
+  initial: { opacity: 0, y: 18, scale: 0.992 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: -10, scale: 0.996 },
+  transition: { duration: 0.34, ease: AUTH_EASE_OUT },
+};
+const APP_PANEL_HOVER = {
+  y: -2,
+  transition: { duration: 0.22, ease: AUTH_EASE_OUT },
+};
+const APP_BUTTON_TAP = {
+  scale: 0.985,
+  transition: { duration: 0.16, ease: AUTH_EASE_OUT },
+};
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   // FIXED: session persistence
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
@@ -130,6 +156,54 @@ class ApiRequestError extends Error {
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeOrigin(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate) return "";
+  try {
+    const url = new URL(candidate);
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
+function isLocalOrigin(value) {
+  try {
+    const hostname = new URL(value).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function getAuthRedirectOrigin() {
+  const configuredOrigin = normalizeOrigin(AUTH_REDIRECT_ORIGIN);
+  if (configuredOrigin) return configuredOrigin;
+
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  if (IS_DEV || (currentOrigin && !isLocalOrigin(currentOrigin))) return currentOrigin;
+  return PRODUCTION_AUTH_ORIGIN;
+}
+
+function buildAuthRedirectUrl(flow) {
+  const redirectUrl = new URL(getAuthRedirectOrigin());
+  redirectUrl.searchParams.set("auth_flow", flow);
+  return redirectUrl.toString();
+}
+
+function getAuthFlowFromLocation() {
+  if (typeof window === "undefined") return "";
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return searchParams.get("auth_flow") || hashParams.get("type") || "";
+}
+
+function clearAuthFlowFromUrl() {
+  if (typeof window === "undefined") return;
+  const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+  window.history.replaceState({}, document.title, cleanUrl);
 }
 
 const MODES = [
@@ -617,6 +691,12 @@ function App() {
     let mounted = true;
 
     async function bootstrapAuth() {
+      const authFlow = getAuthFlowFromLocation();
+      if (authFlow === "recovery") {
+        setIsPasswordRecovery(true);
+        setAuthMode("recovery");
+      }
+
       if (!supabase) {
         setAuthError("Missing Supabase frontend configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
         setAuthReady(true);
@@ -652,6 +732,7 @@ function App() {
           if (event === "PASSWORD_RECOVERY") {
             setIsPasswordRecovery(true);
             setAuthMode("recovery");
+            clearAuthFlowFromUrl();
           }
           if (event === "SIGNED_IN" && nextSession) {
             // FIXED: session persistence
@@ -1063,21 +1144,31 @@ function App() {
     setAuthMessage("");
 
     try {
+      if (authMode === "forgot") {
+        await sendPasswordReset();
+        return;
+      }
+
       if (isPasswordRecovery || authMode === "recovery") {
         const { error: updateError } = await supabase.auth.updateUser({ password });
         if (updateError) throw updateError;
         setIsPasswordRecovery(false);
         setAuthMode("signin");
         setAuthMessage("Password updated. You can continue with your account.");
+        clearAuthFlowFromUrl();
         return;
       }
 
       if (authMode === "signup") {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: buildAuthRedirectUrl("confirm") },
+        });
         if (signUpError) {
           throw signUpError;
         }
-        setAuthMessage("Account created. Check your email for confirmation if required, then sign in.");
+        setAuthMessage("Account created. Check your email, confirm your account, then sign in.");
       } else {
         const normalizedEmail = normalizeEmail(email);
         const now = Date.now();
@@ -1113,6 +1204,21 @@ function App() {
     }
   }
 
+  async function sendPasswordReset() {
+    if (!email.trim()) {
+      throw new Error("Enter your email so we can send a reset link.");
+    }
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: buildAuthRedirectUrl("recovery"),
+    });
+    if (resetError) throw resetError;
+
+    loginAttemptsRef.current.delete(normalizeEmail(email));
+    setAuthMode("signin");
+    setAuthMessage("Password reset email sent. Check your inbox.");
+  }
+
   function handleAuthInput(setter, value) {
     setter(value);
     if (!authError) return;
@@ -1122,13 +1228,15 @@ function App() {
   }
 
   async function handleForgotPassword() {
-    if (!supabase) {
-      setAuthError("Supabase client is not configured.");
+    if (!email.trim()) {
+      setAuthMode("forgot");
+      setAuthError("");
+      setAuthMessage("");
       return;
     }
 
-    if (!email.trim()) {
-      setAuthError("Enter your email first, then use forgot password.");
+    if (!supabase) {
+      setAuthError("Supabase client is not configured.");
       return;
     }
 
@@ -1137,15 +1245,7 @@ function App() {
     setAuthMessage("");
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: window.location.origin,
-      });
-      if (resetError) {
-        throw resetError;
-      }
-
-      loginAttemptsRef.current.delete(normalizeEmail(email));
-      setAuthMessage("Password reset email sent. Check your inbox.");
+      await sendPasswordReset();
     } catch (err) {
       setAuthError(err.message || "Could not send password reset email.");
     } finally {
@@ -1301,14 +1401,28 @@ function App() {
                 <span>PhraseAI</span>
               </motion.div>
               <motion.div className="auth-form-heading" variants={AUTH_FORM_ITEM}>
-                <span className="eyebrow">{isPasswordRecovery ? "ACCOUNT RECOVERY" : authMode === "signin" ? "WELCOME BACK" : "GET STARTED"}</span>
-                <h2>{isPasswordRecovery ? "Set a new password" : authMode === "signin" ? "Welcome back" : "Create your workspace"}</h2>
+                <span className="eyebrow">
+                  {isPasswordRecovery
+                    ? "ACCOUNT RECOVERY"
+                    : authMode === "forgot"
+                      ? "RESET ACCESS"
+                      : authMode === "signin" ? "WELCOME BACK" : "GET STARTED"}
+                </span>
+                <h2>
+                  {isPasswordRecovery
+                    ? "Set a new password"
+                    : authMode === "forgot"
+                      ? "Reset your password"
+                      : authMode === "signin" ? "Welcome back" : "Create your workspace"}
+                </h2>
                 <p>
                   {isPasswordRecovery
                     ? "Choose a secure password to finish recovering your account."
-                    : authMode === "signin"
-                      ? "Sign in to continue writing at your best"
-                      : "Start with a private workspace for your rewrites and style profile."}
+                    : authMode === "forgot"
+                      ? "Enter your email and we will send a secure password reset link."
+                      : authMode === "signin"
+                        ? "Sign in to continue writing at your best"
+                        : "Start with a private workspace for your rewrites and style profile."}
                 </p>
               </motion.div>
 
@@ -1328,6 +1442,7 @@ function App() {
                 </motion.div>
               ) : null}
 
+              {authMode !== "forgot" ? (
               <motion.div className="field-group" variants={AUTH_FORM_ITEM}>
                 <div className="field-label-row">
                   <label htmlFor="auth-password">{isPasswordRecovery ? "New password" : "Password"}</label>
@@ -1358,6 +1473,7 @@ function App() {
                   </button>
                 </div>
               </motion.div>
+              ) : null}
 
               {/* SCROLL-ANIM: Button states crossfade, press physically, and draw the success mark before redirect. */}
               <motion.button
@@ -1377,10 +1493,16 @@ function App() {
                     {authSucceeded ? (
                       <><span>Signed in</span><AnimatedCheckIcon /></>
                     ) : authBusy ? (
-                      <><span>Signing in...</span><span className="button-spinner" /></>
+                      <><span>{authMode === "forgot" ? "Sending reset link..." : "Signing in..."}</span><span className="button-spinner" /></>
                     ) : (
                       <>
-                        <span>{isPasswordRecovery ? "Update password" : authMode === "signin" ? "Sign in" : "Create account"}</span>
+                        <span>
+                          {isPasswordRecovery
+                            ? "Update password"
+                            : authMode === "forgot"
+                              ? "Send reset link"
+                              : authMode === "signin" ? "Sign in" : "Create account"}
+                        </span>
                         <ArrowIcon />
                       </>
                     )}
@@ -1390,7 +1512,9 @@ function App() {
 
               {!isPasswordRecovery ? (
                 <motion.p className="auth-switch" variants={AUTH_FORM_ITEM}>
-                  {authMode === "signin" ? "Don't have an account?" : "Already have an account?"}
+                  {authMode === "forgot"
+                    ? "Remembered your password?"
+                    : authMode === "signin" ? "Don't have an account?" : "Already have an account?"}
                   <button
                     type="button"
                     onClick={() => {
@@ -1536,7 +1660,7 @@ function App() {
   function renderHome() {
     return (
       <div className="composer-workspace">
-        <section className="composer-panel input-panel">
+        <motion.section className="composer-panel input-panel" whileHover={APP_PANEL_HOVER}>
           <div className="panel-heading">
             <div>
               <span className="eyebrow">ORIGINAL</span>
@@ -1627,17 +1751,18 @@ function App() {
             ) : null}
           </div>
 
-          <button
+          <motion.button
             type="button"
             className="primary-button rewrite-button"
             disabled={loading || !rewriteReady}
             onClick={handleRewrite}
             aria-busy={loading}
+            whileTap={APP_BUTTON_TAP}
           >
             {loading ? <span className="button-spinner dark" /> : <SparkleIcon />}
             <span>{loading ? "Refining your message..." : `Rewrite as ${modeLabel}`}</span>
             {!loading ? <kbd>⌘ ↵</kbd> : null}
-          </button>
+          </motion.button>
 
           <div className="message-region" aria-live="polite">
             {error ? <p className={`status-message ${lastRewriteSource === "fallback" ? "warning" : "error"}`}>{error}</p> : null}
@@ -1648,9 +1773,9 @@ function App() {
               </details>
             ) : null}
           </div>
-        </section>
+        </motion.section>
 
-        <section className="composer-panel output-panel">
+        <motion.section className="composer-panel output-panel" whileHover={APP_PANEL_HOVER}>
           <div className="panel-heading">
             <div>
               <span className="eyebrow">REFINED</span>
@@ -1718,7 +1843,7 @@ function App() {
               <p className="learning-hint">Edit the result before saving. PhraseAI learns from the version you approve.</p>
             )}
           </div>
-        </section>
+        </motion.section>
       </div>
     );
   }
@@ -2104,8 +2229,9 @@ function App() {
         "--placeholder-color": tokens.fieldPlaceholder,
       }}
     >
-      <aside
+      <motion.aside
         className="app-sidebar"
+        {...APP_SIDEBAR_MOTION}
       >
         <div className="sidebar-brand">
           <BrandLogoIcon light={theme === "light"} />
@@ -2167,12 +2293,12 @@ function App() {
             </span>
           </button>
         </div>
-      </aside>
+      </motion.aside>
 
       <main
         className="app-main"
       >
-        <header className="app-header">
+        <motion.header className="app-header" {...APP_HEADER_MOTION}>
           <div className="app-header-row">
             <div>
               <span className="eyebrow">{activeSection === "home" ? "WORKSPACE" : activeSection.replace("-", " ").toUpperCase()}</span>
@@ -2204,14 +2330,18 @@ function App() {
               </button>
             </div>
           </div>
-        </header>
+        </motion.header>
 
         <div className="app-content">
-          {isHome ? renderHome() : null}
-          {isHistory ? renderHistory() : null}
-          {isSettings ? renderSettings() : null}
-          {isStyleProfile ? renderStyleProfile() : null}
-          {isAccount ? renderAccount() : null}
+          <AnimatePresence mode="wait">
+            <motion.div className="app-section-frame" key={activeSection} {...APP_SECTION_MOTION}>
+              {isHome ? renderHome() : null}
+              {isHistory ? renderHistory() : null}
+              {isSettings ? renderSettings() : null}
+              {isStyleProfile ? renderStyleProfile() : null}
+              {isAccount ? renderAccount() : null}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
     </div>

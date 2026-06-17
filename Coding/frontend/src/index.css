@@ -1080,12 +1080,14 @@ a:focus-visible {
   border: 1px solid transparent;
   border-radius: 7px;
   cursor: pointer;
+  transition: transform 180ms ease, color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .sidebar-link:hover,
 .account-button:hover {
   color: var(--text);
   background: var(--panel);
+  transform: translateX(2px);
 }
 
 .sidebar-link.active {
@@ -1249,6 +1251,12 @@ a:focus-visible {
   flex: 1;
   overflow: auto;
   padding: 22px 28px 32px;
+  scroll-behavior: smooth;
+}
+
+.app-section-frame {
+  min-height: 100%;
+  will-change: transform, opacity;
 }
 
 /* AGENT2: [CHANGE] Composer controls now read as one continuous writing workflow. */
@@ -1270,6 +1278,14 @@ a:focus-visible {
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.1);
+  transform-origin: center top;
+  transition: border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
+  will-change: transform;
+}
+
+.composer-panel:hover {
+  border-color: color-mix(in srgb, var(--border) 72%, #67d9a3);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.14);
 }
 
 .panel-heading {
@@ -1430,6 +1446,7 @@ a:focus-visible {
   border: 1px solid transparent;
   border-radius: 5px;
   cursor: pointer;
+  transition: transform 180ms ease, color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .mode-option > span {
@@ -1455,6 +1472,7 @@ a:focus-visible {
 .mode-option:hover {
   color: var(--text);
   background: var(--panel);
+  transform: translateY(-1px);
 }
 
 .mode-option.active {
@@ -1486,6 +1504,7 @@ a:focus-visible {
   background: transparent;
   border: 0;
   cursor: pointer;
+  transition: color 180ms ease, background-color 180ms ease;
 }
 
 .context-toggle:hover {

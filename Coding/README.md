@@ -41,6 +41,8 @@ Frontend (`frontend/.env`):
 - `VITE_API_URL` (example: `http://localhost:8000`)
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_AUTH_REDIRECT_URL` (production origin used for signup confirmation and password reset links)
+- `VITE_PUBLIC_SITE_URL` (fallback public origin if `VITE_AUTH_REDIRECT_URL` is not set)
 - `VITE_FORCE_LOGIN_ON_VISIT` (optional, defaults to `false`)
 
 Backend (`backend/.env`):
@@ -68,6 +70,28 @@ Backend (`backend/.env`):
 4. Copy **Project URL** into `SUPABASE_URL`.
 5. Copy **service_role** key into `SUPABASE_SERVICE_ROLE_KEY`.
 6. Copy **anon public** key into `VITE_SUPABASE_ANON_KEY`.
+
+### Supabase Auth Redirect Setup
+
+PhraseAI sends explicit auth redirects from the frontend:
+
+- Signup confirmation: `${VITE_AUTH_REDIRECT_URL}?auth_flow=confirm`
+- Password recovery: `${VITE_AUTH_REDIRECT_URL}?auth_flow=recovery`
+
+In Supabase Dashboard → Authentication → URL Configuration:
+
+1. Set **Site URL** to the production frontend origin, for example `https://phraseai-nico.vercel.app`.
+2. Add this exact origin to **Redirect URLs**: `https://phraseai-nico.vercel.app`.
+3. Add the confirmation URL if Supabase requires exact query URLs: `https://phraseai-nico.vercel.app?auth_flow=confirm`.
+4. Add the recovery URL if Supabase requires exact query URLs: `https://phraseai-nico.vercel.app?auth_flow=recovery`.
+
+In Supabase Dashboard → Authentication → Email Templates:
+
+1. Confirm that the signup confirmation template links to `{{ .ConfirmationURL }}`.
+2. Confirm that the password recovery template links to `{{ .ConfirmationURL }}`.
+3. Do not hardcode `localhost` in either template.
+
+If the custom domain `https://phraseai.com` is active and DNS-resolving, use that as `VITE_AUTH_REDIRECT_URL` and add the equivalent redirect URLs in Supabase.
 
 Important:
 - Use `service_role` only in backend/server env files.
