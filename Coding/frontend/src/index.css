@@ -1156,6 +1156,8 @@ a:focus-visible {
 }
 
 .app-main {
+  position: relative;
+  isolation: isolate;
   display: flex;
   min-width: 0;
   flex: 1;
@@ -1163,8 +1165,47 @@ a:focus-visible {
   overflow: hidden;
 }
 
-.app-header {
+.app-scroll-atmosphere {
+  position: absolute;
+  z-index: -1;
+  top: 70px;
+  right: -16%;
+  width: min(760px, 68vw);
+  aspect-ratio: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 45% 45%, rgba(74, 222, 128, 0.09), transparent 32%),
+    conic-gradient(from 140deg, transparent, rgba(74, 222, 128, 0.04), transparent 42%);
+  border: 1px solid rgba(74, 222, 128, 0.04);
+  border-radius: 50%;
+  filter: blur(1px);
+  will-change: transform;
+}
+
+.app-scroll-atmosphere::before,
+.app-scroll-atmosphere::after {
+  content: "";
+  position: absolute;
+  border: 1px solid rgba(74, 222, 128, 0.055);
+  border-radius: inherit;
+}
+
+.app-scroll-atmosphere::before {
+  inset: 14%;
+}
+
+.app-scroll-atmosphere::after {
+  inset: 29%;
+}
+
+.app-header-motion {
+  position: relative;
+  z-index: 8;
   flex: 0 0 auto;
+  will-change: transform, opacity;
+}
+
+.app-header {
   padding: 23px 28px 19px;
   background: color-mix(in srgb, var(--page-bg) 90%, transparent);
   border-bottom: 1px solid var(--border);
@@ -1276,6 +1317,53 @@ a:focus-visible {
 .app-section-frame {
   min-height: 100%;
   will-change: transform, opacity;
+}
+
+.app-scroll-plane {
+  min-height: 100%;
+  transform-origin: center top;
+  will-change: transform;
+}
+
+.app-scroll-compass {
+  position: fixed;
+  z-index: 25;
+  top: 50%;
+  right: 15px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.app-scroll-compass > span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.app-scroll-compass > i {
+  position: relative;
+  width: 2px;
+  height: 90px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 99px;
+}
+
+.app-scroll-compass b {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background: linear-gradient(180deg, #4ade80, rgba(255, 255, 255, 0.9));
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.4);
+  transform: scaleY(0);
+  transform-origin: center top;
 }
 
 /* AGENT2: [CHANGE] Composer controls now read as one continuous writing workflow. */
@@ -3470,6 +3558,16 @@ a:focus-visible {
 
   .app-shell {
     padding-bottom: 67px;
+  }
+
+  .app-scroll-compass {
+    display: none;
+  }
+
+  .app-scroll-atmosphere {
+    right: -55%;
+    width: 120vw;
+    opacity: 0.7;
   }
 
   .app-sidebar {

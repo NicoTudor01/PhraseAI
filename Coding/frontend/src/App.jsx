@@ -38,6 +38,13 @@ const HISTORY_HERO_Y_OUTPUT = [0, -58];
 const HISTORY_HERO_SCALE_OUTPUT = [1, 0.97];
 const HISTORY_TOOLBAR_Y_OUTPUT = [42, -12];
 const HISTORY_FEED_Y_OUTPUT = [94, 0];
+const APP_GLOBAL_SCROLL_INPUT = [0, 1400];
+const APP_PLANE_Y_OUTPUT = [0, -46];
+const APP_PLANE_SCALE_OUTPUT = [1, 0.986];
+const APP_AMBIENT_Y_OUTPUT = [0, -210];
+const APP_AMBIENT_ROTATE_OUTPUT = [-5, 9];
+const APP_HEADER_Y_OUTPUT = [0, -9];
+const APP_HEADER_OPACITY_OUTPUT = [1, 0.9];
 const AUTH_PULL_SCROLL_INPUT = [0, 760];
 const AUTH_HERO_SCALE_OUTPUT = [1, 0.9];
 const AUTH_HERO_OPACITY_OUTPUT = [1, 0.3];
@@ -818,6 +825,12 @@ function App() {
   const historyHeroScale = useTransform(smoothAppScrollY, HISTORY_SCROLL_INPUT, HISTORY_HERO_SCALE_OUTPUT);
   const historyToolbarY = useTransform(smoothAppScrollY, HISTORY_SCROLL_INPUT, HISTORY_TOOLBAR_Y_OUTPUT);
   const historyFeedY = useTransform(smoothAppScrollY, HISTORY_SCROLL_INPUT, HISTORY_FEED_Y_OUTPUT);
+  const appPlaneY = useTransform(smoothAppScrollY, APP_GLOBAL_SCROLL_INPUT, APP_PLANE_Y_OUTPUT);
+  const appPlaneScale = useTransform(smoothAppScrollY, APP_GLOBAL_SCROLL_INPUT, APP_PLANE_SCALE_OUTPUT);
+  const appAmbientY = useTransform(smoothAppScrollY, APP_GLOBAL_SCROLL_INPUT, APP_AMBIENT_Y_OUTPUT);
+  const appAmbientRotate = useTransform(smoothAppScrollY, APP_GLOBAL_SCROLL_INPUT, APP_AMBIENT_ROTATE_OUTPUT);
+  const appHeaderY = useTransform(smoothAppScrollY, [0, 240], APP_HEADER_Y_OUTPUT);
+  const appHeaderOpacity = useTransform(smoothAppScrollY, [0, 240], APP_HEADER_OPACITY_OUTPUT);
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
   const [showContext, setShowContext] = useState(false);
@@ -890,6 +903,12 @@ function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const container = appContentRef.current;
+    if (!container) return;
+    container.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeSection]);
 
   useEffect(() => {
     let mounted = true;
@@ -2645,101 +2664,116 @@ function App() {
             const Icon = item.icon;
             const active = activeSection === item.key;
             return (
-              <button
+              <motion.button
                 key={item.key}
                 type="button"
                 className={active ? "sidebar-link active" : "sidebar-link"}
                 onClick={() => setActiveSection(item.key)}
                 aria-current={active ? "page" : undefined}
                 title={item.label}
+                whileHover={{ x: 4, transition: { duration: 0.2, ease: AUTH_EASE_OUT } }}
+                whileTap={APP_BUTTON_TAP}
               >
                 <Icon />
                 <span className="sidebar-link-copy">
                   <strong>{item.label}</strong>
                   <small>{item.description}</small>
                 </span>
-              </button>
+              </motion.button>
             );
           })}
         </nav>
 
         <div className="sidebar-footer">
-          <button
+          <motion.button
             type="button"
             className={isSettings ? "sidebar-link active" : "sidebar-link"}
             onClick={() => setActiveSection("settings")}
             aria-current={isSettings ? "page" : undefined}
             title="Settings"
+            whileHover={{ x: 4, transition: { duration: 0.2, ease: AUTH_EASE_OUT } }}
+            whileTap={APP_BUTTON_TAP}
           >
             <SettingsIcon />
             <span className="sidebar-link-copy">
               <strong>Settings</strong>
               <small>Theme and preferences</small>
             </span>
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
             type="button"
             className={isAccount ? "account-button active" : "account-button"}
             onClick={() => setActiveSection("account")}
             title={`${accountName} (account settings)`}
             aria-label="Account"
+            whileHover={{ x: 4, transition: { duration: 0.2, ease: AUTH_EASE_OUT } }}
+            whileTap={APP_BUTTON_TAP}
           >
             <span className="account-avatar">{accountInitials}</span>
             <span className="account-copy">
               <strong>{session?.user?.email?.split("@")[0] || "Account"}</strong>
               <small>Manage account</small>
             </span>
-          </button>
+          </motion.button>
         </div>
       </motion.aside>
 
       <main
         className="app-main"
       >
-        <motion.header className="app-header" {...APP_HEADER_MOTION}>
-          <div className="app-header-row">
-            <div>
-              <span className="eyebrow">{activeSection === "home" ? "WORKSPACE" : activeSection.replace("-", " ").toUpperCase()}</span>
-              <h1>{currentMeta.title}</h1>
-              <p>{currentMeta.sub}</p>
+        <motion.div className="app-scroll-atmosphere" style={{ y: appAmbientY, rotate: appAmbientRotate }} aria-hidden="true" />
+        <motion.div className="app-header-motion" style={{ y: appHeaderY, opacity: appHeaderOpacity }}>
+          <motion.header className="app-header" {...APP_HEADER_MOTION}>
+            <div className="app-header-row">
+              <div>
+                <span className="eyebrow">{activeSection === "home" ? "WORKSPACE" : activeSection.replace("-", " ").toUpperCase()}</span>
+                <h1>{currentMeta.title}</h1>
+                <p>{currentMeta.sub}</p>
+              </div>
+              <div className="app-header-actions">
+                {aiInfo?.model ? (
+                  <span className="model-status" title={aiInfo.model}>
+                    <span />
+                    {aiInfo.provider || "AI"} online
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+                  aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+                  title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+                >
+                  <ThemeIcon theme={theme} />
+                </button>
+                <button
+                  type="button"
+                  className="header-signout"
+                  onClick={handleSignOut}
+                >
+                  Sign out
+                </button>
+              </div>
             </div>
-            <div className="app-header-actions">
-              {aiInfo?.model ? (
-                <span className="model-status" title={aiInfo.model}>
-                  <span />
-                  {aiInfo.provider || "AI"} online
-                </span>
-              ) : null}
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
-                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-                title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              >
-                <ThemeIcon theme={theme} />
-              </button>
-              <button
-                type="button"
-                className="header-signout"
-                onClick={handleSignOut}
-              >
-                Sign out
-              </button>
-            </div>
-          </div>
-        </motion.header>
+          </motion.header>
+        </motion.div>
 
         <div className="app-content" ref={appContentRef}>
           <motion.div className="app-scroll-progress" style={{ scaleX: smoothAppScrollProgress }} aria-hidden="true" />
+          <div className="app-scroll-compass" aria-hidden="true">
+            <span>{activeSection.replace("-", " ")}</span>
+            <i><motion.b style={{ scaleY: smoothAppScrollProgress }} /></i>
+          </div>
           <AnimatePresence mode="wait">
             <motion.div className="app-section-frame" key={activeSection} {...APP_SECTION_MOTION}>
-              {isHome ? renderHome() : null}
-              {isHistory ? renderHistory() : null}
-              {isSettings ? renderSettings() : null}
-              {isStyleProfile ? renderStyleProfile() : null}
-              {isAccount ? renderAccount() : null}
+              <motion.div className="app-scroll-plane" style={{ y: appPlaneY, scale: appPlaneScale }}>
+                {isHome ? renderHome() : null}
+                {isHistory ? renderHistory() : null}
+                {isSettings ? renderSettings() : null}
+                {isStyleProfile ? renderStyleProfile() : null}
+                {isAccount ? renderAccount() : null}
+              </motion.div>
             </motion.div>
           </AnimatePresence>
         </div>
