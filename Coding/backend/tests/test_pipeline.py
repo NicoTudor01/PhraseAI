@@ -258,6 +258,20 @@ class FakeSupabase:
         return FakeTable(f"rpc:{name}", self.responses, self.calls)
 
 
+class MissingOptionalTable(FakeTable):
+    def execute(self):
+        self.calls.append((self.name, "execute", (), {}))
+        raise RuntimeError(f'relation "public.{self.name}" does not exist')
+
+
+class MissingStyleFeedbackSupabase(FakeSupabase):
+    def table(self, name):
+        self.calls.append((name, "table", (), {}))
+        if name == "style_feedback":
+            return MissingOptionalTable(name, self.responses, self.calls)
+        return FakeTable(name, self.responses, self.calls)
+
+
 class PersistenceTests(unittest.TestCase):
     def test_rewrite_and_finalization_helpers_scope_by_user(self):
         supabase = FakeSupabase(
@@ -477,6 +491,30 @@ class PersistenceTests(unittest.TestCase):
         self.assertTrue(
             any(call[0] == "persona_snapshots" and call[1] == "range" for call in supabase.calls)
         )
+
+    def test_style_aggregate_tolerates_missing_optional_feedback_table(self):
+        profile = update_profile_from_feedback(
+            {},
+            LearnRequest(
+                mode="fix_grammar",
+                draft="hello",
+                ai_output="Hello.",
+                final_version="Hello, please send the report. Thank you.",
+            ),
+        )
+        supabase = MissingStyleFeedbackSupabase(
+            {
+                "style_profiles": [[{"profile": profile, "last_updated": "now"}]],
+                "style_tags": [[{"tags": ["formal"], "updated_at": "now"}]],
+                "email_history": [[{"id": 9, "original_text": "hello", "final_version": "Hello."}]],
+                "persona_snapshots": [[{"id": 3, "style": profile, "completeness": 0.4}]],
+            }
+        )
+
+        data = get_style_data_for_user(supabase, "user-123")
+
+        self.assertEqual(data["feedback_events"], [])
+        self.assertEqual(data["history"][0]["id"], 9)
 
 
 class FeedbackRouteTests(unittest.IsolatedAsyncioTestCase):

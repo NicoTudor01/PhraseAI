@@ -1663,6 +1663,49 @@ def _fetch_all_user_rows(
         offset += page_size
 
 
+def _is_optional_table_unavailable(exc: Exception, table_name: str) -> bool:
+    message = str(exc).lower()
+    if table_name.lower() not in message:
+        return False
+    return any(
+        marker in message
+        for marker in (
+            "does not exist",
+            "could not find the table",
+            "schema cache",
+            "not found in the schema cache",
+        )
+    )
+
+
+def _fetch_optional_user_rows(
+    supabase: Client,
+    table_name: str,
+    columns: str,
+    user_id: str,
+    *,
+    order_column: str,
+    descending: bool,
+) -> list[dict]:
+    try:
+        return _fetch_all_user_rows(
+            supabase,
+            table_name,
+            columns,
+            user_id,
+            order_column=order_column,
+            descending=descending,
+        )
+    except Exception as exc:
+        if _is_optional_table_unavailable(exc, table_name):
+            logger.warning(
+                "Optional style aggregate table unavailable; continuing without it.",
+                extra={"table_name": table_name},
+            )
+            return []
+        raise
+
+
 def get_style_data_for_user(supabase: Client, user_id: str) -> dict:
     # AI PIPELINE: Aggregate frontend style data through independently user-scoped service-role queries.
     profile_result = (
@@ -1698,7 +1741,7 @@ def get_style_data_for_user(supabase: Client, user_id: str) -> dict:
         order_column="captured_at",
         descending=False,
     )
-    feedback_rows = _fetch_all_user_rows(
+    feedback_rows = _fetch_optional_user_rows(
         supabase,
         "style_feedback",
         "id,rewrite_id,feedback_type,trait_affected,user_note,manual_edit,metadata,created_at,updated_at",
