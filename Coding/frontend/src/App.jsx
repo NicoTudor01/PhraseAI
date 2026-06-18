@@ -23,6 +23,16 @@ const AUTH_SCROLL_INPUT = [0, 620];
 const AUTH_BACKGROUND_SCROLL_OUTPUT = [0, 250];
 const AUTH_CARDS_SCROLL_OUTPUT = [0, -145];
 const AUTH_SCROLL_SPRING = { stiffness: 86, damping: 24, mass: 0.72, restDelta: 0.001 };
+// SCROLL-ANIM: Main app uses a slightly softer spring so dashboard sections feel pulled rather than snapped.
+const APP_SCROLL_SPRING = { stiffness: 72, damping: 26, mass: 0.85, restDelta: 0.001 };
+const STYLE_SCROLL_INPUT = [0, 900];
+const STYLE_HERO_Y_OUTPUT = [0, -72];
+const STYLE_HERO_SCALE_OUTPUT = [1, 0.955];
+const STYLE_HERO_OPACITY_OUTPUT = [1, 0.72];
+const STYLE_MAP_Y_OUTPUT = [28, -34];
+const STYLE_SIDE_Y_OUTPUT = [78, -18];
+const STYLE_TIMELINE_Y_OUTPUT = [132, -10];
+const STYLE_TRAITS_Y_OUTPUT = [190, 0];
 const AUTH_PULL_SCROLL_INPUT = [0, 760];
 const AUTH_HERO_SCALE_OUTPUT = [1, 0.9];
 const AUTH_HERO_OPACITY_OUTPUT = [1, 0.3];
@@ -684,10 +694,11 @@ function PersonaMap({ initials, traits, personaLabel, onSelectTrait }) {
   );
 }
 
-function StyleSection({ className = "", children }) {
+function StyleSection({ className = "", children, style }) {
   return (
     <motion.section
       className={className}
+      style={style}
       variants={STYLE_SECTION_MOTION}
       initial="hidden"
       whileInView="visible"
@@ -774,6 +785,7 @@ function TraitDrawer({ trait, onClose }) {
 
 function App() {
   const authErrorTimerRef = useRef(null);
+  const appContentRef = useRef(null);
   // SCROLL-ANIM: A damped scroll signal keeps trackpad and wheel movement fluid without delaying intent.
   const { scrollY: authScrollY } = useScroll();
   const smoothAuthScrollY = useSpring(authScrollY, AUTH_SCROLL_SPRING);
@@ -786,6 +798,16 @@ function App() {
   const authDetailsY = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_PULL_OUTPUT);
   const authDetailsScale = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_SCALE_OUTPUT);
   const authDetailsRotate = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_ROTATE_OUTPUT);
+  // SCROLL-ANIM: Track the app scroll container directly so protected pages get the same layered pull as login.
+  const { scrollY: appScrollY } = useScroll({ container: appContentRef });
+  const smoothAppScrollY = useSpring(appScrollY, APP_SCROLL_SPRING);
+  const styleHeroY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_HERO_Y_OUTPUT);
+  const styleHeroScale = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_HERO_SCALE_OUTPUT);
+  const styleHeroOpacity = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_HERO_OPACITY_OUTPUT);
+  const styleMapY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_MAP_Y_OUTPUT);
+  const styleSideY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_SIDE_Y_OUTPUT);
+  const styleTimelineY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_TIMELINE_Y_OUTPUT);
+  const styleTraitsY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_TRAITS_Y_OUTPUT);
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
   const [showContext, setShowContext] = useState(false);
@@ -2300,7 +2322,7 @@ function App() {
           </div>
         ) : (
           <>
-            <StyleSection className="style-profile-hero">
+            <StyleSection className="style-profile-hero" style={{ y: styleHeroY, scale: styleHeroScale, opacity: styleHeroOpacity }}>
               <motion.div variants={STYLE_ITEM_MOTION}>
                 <span className="eyebrow">CLIENT PERSONA</span>
                 <h2>{personaLabel}</h2>
@@ -2317,8 +2339,8 @@ function App() {
               </motion.div>
             </StyleSection>
 
-            <StyleSection className="style-hero-grid">
-              <motion.div className="style-card persona-map-card" variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
+            <StyleSection className="style-hero-grid style-depth-grid">
+              <motion.div className="style-card persona-map-card" variants={STYLE_ITEM_MOTION} style={{ y: styleMapY }} whileHover={STYLE_CARD_HOVER}>
                 <div className="style-card-heading">
                   <div>
                     <span className="eyebrow">MENTAL MAP</span>
@@ -2335,7 +2357,7 @@ function App() {
                 </AnimatePresence>
               </motion.div>
 
-              <div className="style-side-stack">
+              <motion.div className="style-side-stack" style={{ y: styleSideY }}>
                 <motion.section className="style-card strength-card sticky-strength-card" variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
                   <div className="strength-heading">
                     <div>
@@ -2368,10 +2390,10 @@ function App() {
                     <p>Rate a rewrite and this will show exactly how your feedback changed the profile.</p>
                   )}
                 </motion.section>
-              </div>
+              </motion.div>
             </StyleSection>
 
-            <StyleSection className="style-card evolution-card">
+            <StyleSection className="style-card evolution-card" style={{ y: styleTimelineY }}>
               <div className="style-card-heading">
                 <div>
                   <span className="eyebrow">EVOLUTION</span>
@@ -2409,7 +2431,7 @@ function App() {
               )}
             </StyleSection>
 
-            <StyleSection className="style-card trait-breakdown-section">
+            <StyleSection className="style-card trait-breakdown-section" style={{ y: styleTraitsY }}>
               <div className="style-card-heading">
                 <div>
                   <span className="eyebrow">TRAIT BREAKDOWN</span>
@@ -2624,7 +2646,7 @@ function App() {
           </div>
         </motion.header>
 
-        <div className="app-content">
+        <div className="app-content" ref={appContentRef}>
           <AnimatePresence mode="wait">
             <motion.div className="app-section-frame" key={activeSection} {...APP_SECTION_MOTION}>
               {isHome ? renderHome() : null}

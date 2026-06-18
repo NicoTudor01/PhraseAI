@@ -1252,6 +1252,8 @@ a:focus-visible {
   overflow: auto;
   padding: 22px 28px 32px;
   scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .app-section-frame {
@@ -1759,9 +1761,27 @@ a:focus-visible {
 
 /* FRONTEND ENGINEER: Rebuilt Style Profile uses the requested dark client-persona dashboard palette. */
 .style-page-rebuild {
+  position: relative;
+  isolation: isolate;
   gap: 18px;
   padding-bottom: 40px;
   color: #f8fafc;
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+/* SCROLL-ANIM: A slow ambient layer makes the dashboard feel continuous while scrolling. */
+.style-page-rebuild::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 88px 0 0 228px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 16%, rgba(74, 222, 128, 0.08), transparent 28%),
+    radial-gradient(circle at 86% 48%, rgba(255, 255, 255, 0.035), transparent 24%);
+  opacity: 0.9;
+  animation: styleAmbientDrift 10s ease-in-out infinite alternate;
 }
 
 .style-page-rebuild .style-card,
@@ -1774,6 +1794,7 @@ a:focus-visible {
 }
 
 .style-profile-hero {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
@@ -1783,6 +1804,22 @@ a:focus-visible {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
+  transform-origin: center top;
+  will-change: transform, opacity;
+}
+
+/* SCROLL-ANIM: The hero underglow makes later sections feel pulled upward from it. */
+.style-profile-hero::after {
+  content: "";
+  position: absolute;
+  right: 12%;
+  bottom: -80px;
+  left: 12%;
+  height: 130px;
+  background: radial-gradient(ellipse, rgba(74, 222, 128, 0.13), transparent 64%);
+  filter: blur(8px);
+  pointer-events: none;
+  animation: styleGlowBreathe 6s ease-in-out infinite;
 }
 
 .style-profile-hero h2 {
@@ -1908,11 +1945,18 @@ a:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(290px, 0.8fr);
   gap: 16px;
+  will-change: transform;
+}
+
+.style-depth-grid {
+  margin-top: -10px;
 }
 
 .style-side-stack {
   display: grid;
   gap: 16px;
+  align-self: start;
+  will-change: transform;
 }
 
 .live-profile-badge,
@@ -1949,6 +1993,26 @@ a:focus-visible {
 }
 
 /* FRONTEND: The custom SVG map scales confidence into edge weight, opacity, and node size. */
+.persona-map-card {
+  position: relative;
+  will-change: transform;
+}
+
+.persona-map-card::after {
+  content: "";
+  position: absolute;
+  inset: 20px;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(74, 222, 128, 0.055), transparent 60%);
+  pointer-events: none;
+  animation: styleMapAura 7s ease-in-out infinite;
+}
+
+.persona-map-card > * {
+  position: relative;
+  z-index: 1;
+}
+
 .persona-map-wrap {
   display: grid;
   min-height: 348px;
@@ -1957,6 +2021,7 @@ a:focus-visible {
   background:
     radial-gradient(circle at 50% 48%, rgba(103, 217, 163, 0.07), transparent 34%),
     linear-gradient(180deg, transparent, color-mix(in srgb, var(--page-bg) 34%, transparent));
+  transform: translateZ(0);
 }
 
 .persona-map-svg {
@@ -1988,19 +2053,19 @@ a:focus-visible {
 }
 
 .persona-orbit-one {
-  animation: orbitDrift 35s linear infinite;
+  animation: orbitDrift 35s ease-in-out infinite alternate;
 }
 
 .persona-orbit-two {
   opacity: 0.65;
-  animation: orbitDrift 52s linear infinite reverse;
+  animation: orbitDrift 52s ease-in-out infinite alternate-reverse;
 }
 
 .persona-edge {
   stroke: #67d9a3;
   stroke-linecap: round;
   stroke-dasharray: 2 5;
-  animation: edgeFlow 5s linear infinite;
+  animation: edgeFlow 5.8s ease-in-out infinite alternate;
 }
 
 .persona-node-halo {
@@ -2723,14 +2788,58 @@ a:focus-visible {
 }
 
 @keyframes orbitDrift {
-  to {
-    transform: rotate(360deg);
+  0% {
+    transform: rotate(-4deg) scale(0.996);
+  }
+  100% {
+    transform: rotate(5deg) scale(1.004);
   }
 }
 
 @keyframes edgeFlow {
-  to {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0.5;
+  }
+  100% {
     stroke-dashoffset: -28;
+    opacity: 0.9;
+  }
+}
+
+/* SCROLL-ANIM: Subtle profile-only atmosphere mirrors the login page's pull without adding layout work. */
+@keyframes styleAmbientDrift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.72;
+  }
+  to {
+    transform: translate3d(0, -22px, 0) scale(1.04);
+    opacity: 0.95;
+  }
+}
+
+@keyframes styleGlowBreathe {
+  0%,
+  100% {
+    transform: scaleX(0.92);
+    opacity: 0.58;
+  }
+  50% {
+    transform: scaleX(1.08);
+    opacity: 0.9;
+  }
+}
+
+@keyframes styleMapAura {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.62;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
   }
 }
 
@@ -2844,6 +2953,10 @@ a:focus-visible {
 
   .trait-breakdown-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .style-page-rebuild::before {
+    left: 0;
   }
 
   .persona-summary-card {
