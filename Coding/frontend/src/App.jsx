@@ -770,25 +770,36 @@ function ScrollScene({ containerRef, className = "", label = "", chapter = "", c
     target: sceneRef,
     offset: ["start end", "end start"],
   });
-  const progress = useSpring(scrollYProgress, { stiffness: 92, damping: 28, mass: 0.82, restDelta: 0.001 });
-  const y = useTransform(progress, [0, 0.2, 0.76, 1], [86, 0, 0, -68]);
-  const scale = useTransform(progress, [0, 0.2, 0.76, 1], [0.925, 1, 1, 0.965]);
-  const opacity = useTransform(progress, [0, 0.14, 0.84, 1], [0.18, 1, 1, 0.38]);
-  const rotateX = useTransform(progress, [0, 0.22, 0.78, 1], [5, 0, 0, -2.5]);
+  const progress = useSpring(scrollYProgress, { stiffness: 76, damping: 22, mass: 0.96, restDelta: 0.001 });
+  const y = useTransform(progress, [0, 0.13, 0.28, 0.76, 1], [148, 74, 0, 0, -108]);
+  const scale = useTransform(progress, [0, 0.18, 0.3, 0.76, 1], [0.86, 0.96, 1, 1, 0.945]);
+  const scaleY = useTransform(progress, [0, 0.18, 0.3, 0.78, 0.92, 1], [0.9, 1.025, 1, 1, 1.045, 0.98]);
+  const opacity = useTransform(progress, [0, 0.12, 0.25, 0.84, 1], [0.08, 0.55, 1, 1, 0.25]);
+  const rotateX = useTransform(progress, [0, 0.2, 0.32, 0.78, 1], [8, 2.5, 0, 0, -4]);
   const accentX = useTransform(progress, [0, 1], ["-35%", "135%"]);
   const clipPath = useTransform(
     progress,
     [0, 0.18, 0.82, 1],
     ["inset(9% 5% 9% 5% round 24px)", "inset(0% 0% 0% 0% round 0px)", "inset(0% 0% 0% 0% round 0px)", "inset(4% 2% 4% 2% round 18px)"],
   );
+  const tetherScale = useTransform(progress, [0, 0.36, 0.7, 0.92, 1], [0, 0, 0.35, 1, 0.18]);
+  const tetherOpacity = useTransform(progress, [0, 0.48, 0.7, 0.92, 1], [0, 0, 0.8, 1, 0]);
+  const tetherNodeY = useTransform(progress, [0.48, 0.92], [0, 210]);
+  const pullCopyY = useTransform(progress, [0.5, 0.88], [18, 0]);
 
   return (
     <section ref={sceneRef} className={`app-cinematic-scene ${className}`} aria-label={label || undefined}>
-      <motion.div className="app-cinematic-frame" style={{ y, scale, opacity, rotateX, clipPath }}>
+      <motion.div className="app-cinematic-frame" style={{ y, scale, scaleY, opacity, rotateX, clipPath }}>
         <motion.span className="app-cinematic-scan" style={{ x: accentX }} aria-hidden="true" />
         {chapter ? <span className="app-cinematic-chapter" aria-hidden="true">{chapter}</span> : null}
         {children}
       </motion.div>
+      <motion.div className="app-cinematic-tether" style={{ scaleY: tetherScale, opacity: tetherOpacity }} aria-hidden="true">
+        <motion.span style={{ y: tetherNodeY }} />
+      </motion.div>
+      <motion.span className="app-cinematic-pull-copy" style={{ y: pullCopyY, opacity: tetherOpacity }} aria-hidden="true">
+        Pull next chapter
+      </motion.span>
     </section>
   );
 }
