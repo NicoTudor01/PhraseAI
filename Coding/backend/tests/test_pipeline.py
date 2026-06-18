@@ -272,6 +272,36 @@ class MissingStyleFeedbackSupabase(FakeSupabase):
         return FakeTable(name, self.responses, self.calls)
 
 
+class LegacySchemaTable(FakeTable):
+    def __init__(self, name, responses, calls):
+        super().__init__(name, responses, calls)
+        self.selected_columns = ""
+
+    def select(self, columns):
+        self.selected_columns = columns
+        self.calls.append((self.name, "select", (columns,), {}))
+        return self
+
+    def execute(self):
+        modern_only_columns = {
+            "style_profiles": "persona_label",
+            "persona_snapshots": "source_history_id",
+        }
+        missing_column = modern_only_columns.get(self.name)
+        if missing_column and missing_column in self.selected_columns:
+            self.calls.append((self.name, "execute", (), {}))
+            raise RuntimeError(
+                f"Could not find the '{missing_column}' column of '{self.name}' in the schema cache"
+            )
+        return super().execute()
+
+
+class LegacyStyleSchemaSupabase(FakeSupabase):
+    def table(self, name):
+        self.calls.append((name, "table", (), {}))
+        return LegacySchemaTable(name, self.responses, self.calls)
+
+
 class PersistenceTests(unittest.TestCase):
     def test_rewrite_and_finalization_helpers_scope_by_user(self):
         supabase = FakeSupabase(
@@ -515,6 +545,24 @@ class PersistenceTests(unittest.TestCase):
 
         self.assertEqual(data["feedback_events"], [])
         self.assertEqual(data["history"][0]["id"], 9)
+
+    def test_style_aggregate_falls_back_to_legacy_profile_and_snapshot_columns(self):
+        profile = {"persona_label": "Direct Strategist", "profile_completeness": 0.4}
+        supabase = LegacyStyleSchemaSupabase(
+            {
+                "style_profiles": [[{"profile": profile, "updated_at": "legacy-now"}]],
+                "style_tags": [[{"tags": ["direct"], "updated_at": "tag-now"}]],
+                "email_history": [[{"id": 9, "original_text": "hello"}]],
+                "persona_snapshots": [[{"id": 3, "style": profile, "completeness": 0.4}]],
+                "style_feedback": [[]],
+            }
+        )
+
+        data = get_style_data_for_user(supabase, "user-123")
+
+        self.assertEqual(data["persona_label"], "Direct Strategist")
+        self.assertEqual(data["last_updated"], "legacy-now")
+        self.assertEqual(data["snapshots"][0]["id"], 3)
 
 
 class FeedbackRouteTests(unittest.IsolatedAsyncioTestCase):

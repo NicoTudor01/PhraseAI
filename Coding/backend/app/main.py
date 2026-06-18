@@ -1678,6 +1678,90 @@ def _is_optional_table_unavailable(exc: Exception, table_name: str) -> bool:
     )
 
 
+def _is_schema_shape_unavailable(exc: Exception, table_name: str) -> bool:
+    message = str(exc).lower()
+    return table_name.lower() in message and any(
+        marker in message
+        for marker in (
+            "column",
+            "schema cache",
+            "does not exist",
+            "could not find",
+        )
+    )
+
+
+def _fetch_user_row(
+    supabase: Client,
+    table_name: str,
+    columns: str,
+    user_id: str,
+) -> dict:
+    result = (
+        supabase.table(table_name)
+        .select(columns)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    return (result.data or [{}])[0]
+
+
+def _fetch_user_row_with_legacy_columns(
+    supabase: Client,
+    table_name: str,
+    columns: str,
+    legacy_columns: str,
+    user_id: str,
+) -> dict:
+    try:
+        return _fetch_user_row(supabase, table_name, columns, user_id)
+    except Exception as exc:
+        if not _is_schema_shape_unavailable(exc, table_name):
+            raise
+        logger.warning(
+            "Style aggregate is using legacy columns until the database migration is applied.",
+            extra={"table_name": table_name},
+        )
+        return _fetch_user_row(supabase, table_name, legacy_columns, user_id)
+
+
+def _fetch_all_user_rows_with_legacy_columns(
+    supabase: Client,
+    table_name: str,
+    columns: str,
+    legacy_columns: str,
+    user_id: str,
+    *,
+    order_column: str,
+    descending: bool,
+) -> list[dict]:
+    try:
+        return _fetch_all_user_rows(
+            supabase,
+            table_name,
+            columns,
+            user_id,
+            order_column=order_column,
+            descending=descending,
+        )
+    except Exception as exc:
+        if not _is_schema_shape_unavailable(exc, table_name):
+            raise
+        logger.warning(
+            "Style aggregate is using legacy columns until the database migration is applied.",
+            extra={"table_name": table_name},
+        )
+        return _fetch_all_user_rows(
+            supabase,
+            table_name,
+            legacy_columns,
+            user_id,
+            order_column=order_column,
+            descending=descending,
+        )
+
+
 def _fetch_optional_user_rows(
     supabase: Client,
     table_name: str,
@@ -1708,12 +1792,12 @@ def _fetch_optional_user_rows(
 
 def get_style_data_for_user(supabase: Client, user_id: str) -> dict:
     # AI PIPELINE: Aggregate frontend style data through independently user-scoped service-role queries.
-    profile_result = (
-        supabase.table("style_profiles")
-        .select("profile,persona_label,persona_summary,profile_completeness,emails_analyzed,last_updated")
-        .eq("user_id", user_id)
-        .limit(1)
-        .execute()
+    profile_row = _fetch_user_row_with_legacy_columns(
+        supabase,
+        "style_profiles",
+        "profile,persona_label,persona_summary,profile_completeness,emails_analyzed,last_updated",
+        "profile,updated_at",
+        user_id,
     )
     tag_result = (
         supabase.table("style_tags")
@@ -1733,10 +1817,11 @@ def get_style_data_for_user(supabase: Client, user_id: str) -> dict:
         order_column="submitted_at",
         descending=True,
     )
-    snapshot_rows = _fetch_all_user_rows(
+    snapshot_rows = _fetch_all_user_rows_with_legacy_columns(
         supabase,
         "persona_snapshots",
         "id,style,completeness,source_history_id,persona_label,persona_summary,captured_at,created_at",
+        "id,style,completeness,captured_at,created_at",
         user_id,
         order_column="captured_at",
         descending=False,
@@ -1749,7 +1834,6 @@ def get_style_data_for_user(supabase: Client, user_id: str) -> dict:
         order_column="created_at",
         descending=True,
     )
-    profile_row = (profile_result.data or [{}])[0]
     tag_row = (tag_result.data or [{}])[0]
     profile = profile_row.get("profile") or {}
     return {
@@ -1759,7 +1843,7 @@ def get_style_data_for_user(supabase: Client, user_id: str) -> dict:
         "tags": tag_row.get("tags") or derive_style_tags(profile),
         "completeness": profile_row.get("profile_completeness") or profile.get("profile_completeness") or profile_completeness(profile),
         "emails_analyzed": profile_row.get("emails_analyzed") or profile.get("emails_analyzed") or (profile.get("stats") or {}).get("learned_examples", 0),
-        "last_updated": profile_row.get("last_updated") or tag_row.get("updated_at"),
+        "last_updated": profile_row.get("last_updated") or profile_row.get("updated_at") or tag_row.get("updated_at"),
         "history": history_rows,
         "snapshots": snapshot_rows,
         "feedback_events": feedback_rows,
