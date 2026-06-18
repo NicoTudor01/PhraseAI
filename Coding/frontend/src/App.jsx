@@ -721,7 +721,49 @@ function StyleSection({ className = "", children, style }) {
   );
 }
 
-function ScrollScene({ containerRef, className = "", label = "", children }) {
+function KineticHeading({ children, className = "" }) {
+  const words = String(children || "").split(/\s+/).filter(Boolean);
+  return (
+    <motion.h2
+      className={`kinetic-heading ${className}`}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-12%" }}
+      variants={{ visible: { transition: { staggerChildren: 0.045 } } }}
+    >
+      {words.map((word, index) => (
+        <span className="kinetic-word-mask" key={`${word}-${index}`}>
+          <motion.span
+            variants={{
+              hidden: { y: "112%", rotate: 2.5, opacity: 0 },
+              visible: { y: "0%", rotate: 0, opacity: 1, transition: { duration: 0.7, ease: AUTH_EASE_OUT } },
+            }}
+          >
+            {word}
+          </motion.span>
+        </span>
+      ))}
+    </motion.h2>
+  );
+}
+
+function ScrollMarquee({ containerRef, items }) {
+  const marqueeRef = useRef(null);
+  const { scrollYProgress } = useScroll({ container: containerRef, target: marqueeRef, offset: ["start end", "end start"] });
+  const progress = useSpring(scrollYProgress, { stiffness: 88, damping: 27, mass: 0.8 });
+  const x = useTransform(progress, [0, 1], ["2%", "-34%"]);
+  const source = items.length ? items : ["Tone", "Rhythm", "Clarity", "Intent"];
+  const content = [...source, ...source, ...source];
+  return (
+    <div className="scroll-marquee" ref={marqueeRef} aria-hidden="true">
+      <motion.div style={{ x }}>
+        {content.map((item, index) => <span key={`${item}-${index}`}>{item}<i /></span>)}
+      </motion.div>
+    </div>
+  );
+}
+
+function ScrollScene({ containerRef, className = "", label = "", chapter = "", children }) {
   const sceneRef = useRef(null);
   const { scrollYProgress } = useScroll({
     container: containerRef,
@@ -734,11 +776,17 @@ function ScrollScene({ containerRef, className = "", label = "", children }) {
   const opacity = useTransform(progress, [0, 0.14, 0.84, 1], [0.18, 1, 1, 0.38]);
   const rotateX = useTransform(progress, [0, 0.22, 0.78, 1], [5, 0, 0, -2.5]);
   const accentX = useTransform(progress, [0, 1], ["-35%", "135%"]);
+  const clipPath = useTransform(
+    progress,
+    [0, 0.18, 0.82, 1],
+    ["inset(9% 5% 9% 5% round 24px)", "inset(0% 0% 0% 0% round 0px)", "inset(0% 0% 0% 0% round 0px)", "inset(4% 2% 4% 2% round 18px)"],
+  );
 
   return (
     <section ref={sceneRef} className={`app-cinematic-scene ${className}`} aria-label={label || undefined}>
-      <motion.div className="app-cinematic-frame" style={{ y, scale, opacity, rotateX }}>
+      <motion.div className="app-cinematic-frame" style={{ y, scale, opacity, rotateX, clipPath }}>
         <motion.span className="app-cinematic-scan" style={{ x: accentX }} aria-hidden="true" />
+        {chapter ? <span className="app-cinematic-chapter" aria-hidden="true">{chapter}</span> : null}
         {children}
       </motion.div>
     </section>
@@ -2123,11 +2171,11 @@ function App() {
 
     return (
       <div className="style-page style-page-history history-page-rebuild">
-        <ScrollScene containerRef={appContentRef} className="history-cinematic-scene" label="Writing memory overview">
+        <ScrollScene containerRef={appContentRef} className="history-cinematic-scene" label="Writing memory overview" chapter="01 / MEMORY">
           <motion.section className="history-hero" style={{ y: historyHeroY, scale: historyHeroScale }}>
             <motion.div variants={STYLE_ITEM_MOTION} initial="hidden" animate="visible">
               <span className="eyebrow">YOUR WRITING MEMORY</span>
-              <h2>Every rewrite leaves your voice clearer.</h2>
+              <KineticHeading>Every rewrite leaves your voice clearer.</KineticHeading>
               <p>Review the decisions that shaped your profile, compare your drafts, and teach PhraseAI what sounds unmistakably like you.</p>
             </motion.div>
             <motion.div className="history-stat-grid" variants={STYLE_SECTION_MOTION} initial="hidden" animate="visible">
@@ -2144,6 +2192,8 @@ function App() {
             <span className="history-approval-signal"><i style={{ width: `${entries.length ? Math.round((approvedCount / entries.length) * 100) : 0}%` }} />{approvedCount} approved rewrites</span>
           </motion.section>
         </ScrollScene>
+
+        <ScrollMarquee containerRef={appContentRef} items={["Original thought", "Refined voice", "Your decision", "Stronger profile"]} />
 
         <motion.section className="history-command-bar" style={{ y: historyToolbarY }}>
           <label className="history-search">
@@ -2452,11 +2502,11 @@ function App() {
           </div>
         ) : (
           <>
-            <ScrollScene containerRef={appContentRef} className="persona-cinematic-scene" label="Current writing persona">
+            <ScrollScene containerRef={appContentRef} className="persona-cinematic-scene" label="Current writing persona" chapter="01 / PERSONA">
               <StyleSection className="style-profile-hero" style={{ y: styleHeroY, scale: styleHeroScale, opacity: styleHeroOpacity }}>
                 <motion.div variants={STYLE_ITEM_MOTION}>
                   <span className="eyebrow">CLIENT PERSONA</span>
-                  <h2>{personaLabel}</h2>
+                  <KineticHeading>{personaLabel}</KineticHeading>
                   <p>{summary}</p>
                   <div className="trait-chip-row">
                     {traits.slice(0, 6).map((trait) => (
@@ -2471,7 +2521,9 @@ function App() {
               </StyleSection>
             </ScrollScene>
 
-            <ScrollScene containerRef={appContentRef} className="map-cinematic-scene" label="Interactive writing style map">
+            <ScrollMarquee containerRef={appContentRef} items={traits.slice(0, 5).map((trait) => titleCase(trait.label))} />
+
+            <ScrollScene containerRef={appContentRef} className="map-cinematic-scene" label="Interactive writing style map" chapter="02 / SIGNALS">
               <StyleSection className="style-hero-grid style-depth-grid">
                 <motion.div className="style-card persona-map-card" variants={STYLE_ITEM_MOTION} style={{ y: styleMapY }} whileHover={STYLE_CARD_HOVER}>
                 <div className="style-card-heading">
@@ -2527,7 +2579,7 @@ function App() {
               </StyleSection>
             </ScrollScene>
 
-            <ScrollScene containerRef={appContentRef} className="evolution-cinematic-scene" label="Writing style evolution">
+            <ScrollScene containerRef={appContentRef} className="evolution-cinematic-scene" label="Writing style evolution" chapter="03 / EVOLUTION">
               <StyleSection className="style-card evolution-card" style={{ y: styleTimelineY }}>
               <div className="style-card-heading">
                 <div>

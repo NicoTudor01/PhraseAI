@@ -1902,6 +1902,82 @@ a:focus-visible {
   will-change: transform;
 }
 
+.app-cinematic-chapter {
+  position: absolute !important;
+  z-index: 5 !important;
+  top: 16px;
+  right: 18px;
+  padding: 7px 9px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+  background: rgba(8, 8, 8, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  backdrop-filter: blur(10px);
+}
+
+.kinetic-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.22em;
+}
+
+.kinetic-word-mask {
+  display: inline-block;
+  overflow: hidden;
+  padding: 0.08em 0.02em 0.12em;
+  margin: -0.08em -0.02em -0.12em;
+  vertical-align: top;
+}
+
+.kinetic-word-mask > span {
+  display: inline-block;
+  transform-origin: left bottom;
+  will-change: transform, opacity;
+}
+
+.scroll-marquee {
+  position: relative;
+  z-index: 3;
+  width: calc(100% + 56px);
+  margin: -24px -28px 8px;
+  overflow: hidden;
+  padding: 19px 0 21px;
+  border-top: 1px solid rgba(74, 222, 128, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+.scroll-marquee > div {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 30px;
+  will-change: transform;
+}
+
+.scroll-marquee span {
+  display: inline-flex;
+  align-items: center;
+  gap: 30px;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: clamp(19px, 2.4vw, 34px);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.scroll-marquee i {
+  width: 7px;
+  height: 7px;
+  background: #4ade80;
+  border-radius: 50%;
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.5);
+}
+
 .map-cinematic-scene {
   min-height: max(820px, 118dvh);
 }
@@ -3469,6 +3545,17 @@ a:focus-visible {
     display: none;
   }
 
+  .app-cinematic-chapter {
+    top: 10px;
+    right: 10px;
+  }
+
+  .scroll-marquee {
+    width: calc(100% + 24px);
+    margin-right: -12px;
+    margin-left: -12px;
+  }
+
   .history-hero {
     min-height: 0;
     padding: 28px 22px 72px;
@@ -3973,5 +4060,10 @@ a:focus-visible {
     top: auto;
     opacity: 1 !important;
     transform: none !important;
+    clip-path: none !important;
+  }
+
+  .app-cinematic-scan {
+    display: none;
   }
 }
