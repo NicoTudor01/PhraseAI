@@ -721,6 +721,30 @@ function StyleSection({ className = "", children, style }) {
   );
 }
 
+function ScrollScene({ containerRef, className = "", label = "", children }) {
+  const sceneRef = useRef(null);
+  const { scrollYProgress } = useScroll({
+    container: containerRef,
+    target: sceneRef,
+    offset: ["start end", "end start"],
+  });
+  const progress = useSpring(scrollYProgress, { stiffness: 92, damping: 28, mass: 0.82, restDelta: 0.001 });
+  const y = useTransform(progress, [0, 0.2, 0.76, 1], [86, 0, 0, -68]);
+  const scale = useTransform(progress, [0, 0.2, 0.76, 1], [0.925, 1, 1, 0.965]);
+  const opacity = useTransform(progress, [0, 0.14, 0.84, 1], [0.18, 1, 1, 0.38]);
+  const rotateX = useTransform(progress, [0, 0.22, 0.78, 1], [5, 0, 0, -2.5]);
+  const accentX = useTransform(progress, [0, 1], ["-35%", "135%"]);
+
+  return (
+    <section ref={sceneRef} className={`app-cinematic-scene ${className}`} aria-label={label || undefined}>
+      <motion.div className="app-cinematic-frame" style={{ y, scale, opacity, rotateX }}>
+        <motion.span className="app-cinematic-scan" style={{ x: accentX }} aria-hidden="true" />
+        {children}
+      </motion.div>
+    </section>
+  );
+}
+
 function CompletenessRing({ value, label = "complete" }) {
   const normalized = Math.max(0, Math.min(1, Number(value) || 0));
   const circumference = 2 * Math.PI * 44;
@@ -2099,25 +2123,27 @@ function App() {
 
     return (
       <div className="style-page style-page-history history-page-rebuild">
-        <motion.section className="history-hero" style={{ y: historyHeroY, scale: historyHeroScale }}>
-          <motion.div variants={STYLE_ITEM_MOTION} initial="hidden" animate="visible">
-            <span className="eyebrow">YOUR WRITING MEMORY</span>
-            <h2>Every rewrite leaves your voice clearer.</h2>
-            <p>Review the decisions that shaped your profile, compare your drafts, and teach PhraseAI what sounds unmistakably like you.</p>
-          </motion.div>
-          <motion.div className="history-stat-grid" variants={STYLE_SECTION_MOTION} initial="hidden" animate="visible">
-            {[
-              [entries.length, "rewrites saved"],
-              [ratedCount, "responses rated"],
-              [learnedTraits, "traits shaped"],
-            ].map(([value, label]) => (
-              <motion.div key={label} variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
-                <strong>{value}</strong><span>{label}</span>
-              </motion.div>
-            ))}
-          </motion.div>
-          <span className="history-approval-signal"><i style={{ width: `${entries.length ? Math.round((approvedCount / entries.length) * 100) : 0}%` }} />{approvedCount} approved rewrites</span>
-        </motion.section>
+        <ScrollScene containerRef={appContentRef} className="history-cinematic-scene" label="Writing memory overview">
+          <motion.section className="history-hero" style={{ y: historyHeroY, scale: historyHeroScale }}>
+            <motion.div variants={STYLE_ITEM_MOTION} initial="hidden" animate="visible">
+              <span className="eyebrow">YOUR WRITING MEMORY</span>
+              <h2>Every rewrite leaves your voice clearer.</h2>
+              <p>Review the decisions that shaped your profile, compare your drafts, and teach PhraseAI what sounds unmistakably like you.</p>
+            </motion.div>
+            <motion.div className="history-stat-grid" variants={STYLE_SECTION_MOTION} initial="hidden" animate="visible">
+              {[
+                [entries.length, "rewrites saved"],
+                [ratedCount, "responses rated"],
+                [learnedTraits, "traits shaped"],
+              ].map(([value, label]) => (
+                <motion.div key={label} variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
+                  <strong>{value}</strong><span>{label}</span>
+                </motion.div>
+              ))}
+            </motion.div>
+            <span className="history-approval-signal"><i style={{ width: `${entries.length ? Math.round((approvedCount / entries.length) * 100) : 0}%` }} />{approvedCount} approved rewrites</span>
+          </motion.section>
+        </ScrollScene>
 
         <motion.section className="history-command-bar" style={{ y: historyToolbarY }}>
           <label className="history-search">
@@ -2426,25 +2452,28 @@ function App() {
           </div>
         ) : (
           <>
-            <StyleSection className="style-profile-hero" style={{ y: styleHeroY, scale: styleHeroScale, opacity: styleHeroOpacity }}>
-              <motion.div variants={STYLE_ITEM_MOTION}>
-                <span className="eyebrow">CLIENT PERSONA</span>
-                <h2>{personaLabel}</h2>
-                <p>{summary}</p>
-                <div className="trait-chip-row">
-                  {traits.slice(0, 6).map((trait) => (
-                    <span className="trait-chip" key={trait.label}>{titleCase(trait.label)}</span>
-                  ))}
-                </div>
-              </motion.div>
-              <motion.div variants={STYLE_ITEM_MOTION} className="profile-ring-panel">
-                <CompletenessRing value={styleData.styleStrength} />
-                <small>Based on {learnedExamples} emails analyzed</small>
-              </motion.div>
-            </StyleSection>
+            <ScrollScene containerRef={appContentRef} className="persona-cinematic-scene" label="Current writing persona">
+              <StyleSection className="style-profile-hero" style={{ y: styleHeroY, scale: styleHeroScale, opacity: styleHeroOpacity }}>
+                <motion.div variants={STYLE_ITEM_MOTION}>
+                  <span className="eyebrow">CLIENT PERSONA</span>
+                  <h2>{personaLabel}</h2>
+                  <p>{summary}</p>
+                  <div className="trait-chip-row">
+                    {traits.slice(0, 6).map((trait) => (
+                      <span className="trait-chip" key={trait.label}>{titleCase(trait.label)}</span>
+                    ))}
+                  </div>
+                </motion.div>
+                <motion.div variants={STYLE_ITEM_MOTION} className="profile-ring-panel">
+                  <CompletenessRing value={styleData.styleStrength} />
+                  <small>Based on {learnedExamples} emails analyzed</small>
+                </motion.div>
+              </StyleSection>
+            </ScrollScene>
 
-            <StyleSection className="style-hero-grid style-depth-grid">
-              <motion.div className="style-card persona-map-card" variants={STYLE_ITEM_MOTION} style={{ y: styleMapY }} whileHover={STYLE_CARD_HOVER}>
+            <ScrollScene containerRef={appContentRef} className="map-cinematic-scene" label="Interactive writing style map">
+              <StyleSection className="style-hero-grid style-depth-grid">
+                <motion.div className="style-card persona-map-card" variants={STYLE_ITEM_MOTION} style={{ y: styleMapY }} whileHover={STYLE_CARD_HOVER}>
                 <div className="style-card-heading">
                   <div>
                     <span className="eyebrow">MENTAL MAP</span>
@@ -2459,9 +2488,9 @@ function App() {
                 <AnimatePresence>
                   {selectedTrait ? <TraitDrawer trait={selectedTrait} onClose={() => setSelectedTrait(null)} /> : null}
                 </AnimatePresence>
-              </motion.div>
+                </motion.div>
 
-              <motion.div className="style-side-stack" style={{ y: styleSideY }}>
+                <motion.div className="style-side-stack" style={{ y: styleSideY }}>
                 <motion.section className="style-card strength-card sticky-strength-card" variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
                   <div className="strength-heading">
                     <div>
@@ -2494,10 +2523,12 @@ function App() {
                     <p>Rate a rewrite and this will show exactly how your feedback changed the profile.</p>
                   )}
                 </motion.section>
-              </motion.div>
-            </StyleSection>
+                </motion.div>
+              </StyleSection>
+            </ScrollScene>
 
-            <StyleSection className="style-card evolution-card" style={{ y: styleTimelineY }}>
+            <ScrollScene containerRef={appContentRef} className="evolution-cinematic-scene" label="Writing style evolution">
+              <StyleSection className="style-card evolution-card" style={{ y: styleTimelineY }}>
               <div className="style-card-heading">
                 <div>
                   <span className="eyebrow">EVOLUTION</span>
@@ -2533,7 +2564,8 @@ function App() {
               ) : (
                 <div className="timeline-empty">Submit more emails to see your style evolve. Timeline unlocks after 3 snapshots.</div>
               )}
-            </StyleSection>
+              </StyleSection>
+            </ScrollScene>
 
             <StyleSection className="style-card trait-breakdown-section" style={{ y: styleTraitsY }}>
               <div className="style-card-heading">

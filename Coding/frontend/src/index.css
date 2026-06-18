@@ -1864,6 +1864,56 @@ a:focus-visible {
   margin: 0 auto;
 }
 
+/* Armory-inspired chapters pin a full visual frame while scroll progress hands it to the next scene. */
+.app-cinematic-scene {
+  position: relative;
+  min-height: max(760px, 108dvh);
+  perspective: 1400px;
+}
+
+.app-cinematic-frame {
+  position: sticky;
+  z-index: 2;
+  top: 22px;
+  width: 100%;
+  overflow: hidden;
+  transform-origin: center 38%;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+}
+
+.app-cinematic-frame > :not(.app-cinematic-scan) {
+  position: relative;
+  z-index: 1;
+}
+
+.app-cinematic-scan {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 28%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(74, 222, 128, 0.07), rgba(255, 255, 255, 0.04), transparent);
+  filter: blur(10px);
+  opacity: 0.8;
+  transform: skewX(-12deg);
+  will-change: transform;
+}
+
+.map-cinematic-scene {
+  min-height: max(820px, 118dvh);
+}
+
+.evolution-cinematic-scene {
+  min-height: max(680px, 96dvh);
+}
+
+.history-cinematic-scene {
+  min-height: max(720px, 102dvh);
+}
+
 /* FRONTEND ENGINEER: Rebuilt Style Profile uses the requested dark client-persona dashboard palette. */
 .style-page-rebuild {
   position: relative;
@@ -3403,6 +3453,22 @@ a:focus-visible {
     padding: 24px;
   }
 
+  .app-cinematic-scene,
+  .map-cinematic-scene,
+  .evolution-cinematic-scene,
+  .history-cinematic-scene {
+    min-height: auto;
+  }
+
+  .app-cinematic-frame {
+    position: relative;
+    top: auto;
+  }
+
+  .app-cinematic-scan {
+    display: none;
+  }
+
   .history-hero {
     min-height: 0;
     padding: 28px 22px 72px;
@@ -3893,5 +3959,19 @@ a:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .app-cinematic-scene,
+  .map-cinematic-scene,
+  .evolution-cinematic-scene,
+  .history-cinematic-scene {
+    min-height: auto;
+  }
+
+  .app-cinematic-frame {
+    position: relative;
+    top: auto;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
