@@ -18,6 +18,19 @@ html {
   background: #080a0b;
 }
 
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -184,6 +197,36 @@ a:focus-visible {
   background: #080a12;
 }
 
+.landing-cursor {
+  position: fixed;
+  z-index: 100;
+  top: 0;
+  left: 0;
+  display: none;
+  width: 13px;
+  height: 13px;
+  pointer-events: none;
+  background: #67d9a3;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 18px rgba(103, 217, 163, 0.42);
+  mix-blend-mode: difference;
+  transition: width 220ms cubic-bezier(0.16, 1, 0.3, 1), height 220ms cubic-bezier(0.16, 1, 0.3, 1), background-color 220ms ease;
+  will-change: transform;
+}
+
+@media (pointer: fine) {
+  .landing-cursor {
+    display: block;
+  }
+
+  .landing-cursor.active {
+    width: 42px;
+    height: 42px;
+    background: rgba(103, 217, 163, 0.14);
+  }
+}
+
 /* SCROLL-ANIM: The atmospheric layer fades through Framer Motion while its existing palette breathes off-thread. */
 .auth-topbar {
   position: absolute;
@@ -333,6 +376,29 @@ a:focus-visible {
   letter-spacing: -0.055em;
 }
 
+.landing-hero-heading,
+.landing-split-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.22em;
+}
+
+.landing-hero-word,
+.landing-word-mask {
+  display: inline-block;
+  overflow: hidden;
+  padding: 0.06em 0.02em 0.1em;
+  margin: -0.06em -0.02em -0.1em;
+  vertical-align: top;
+}
+
+.landing-hero-word > span,
+.landing-word-mask > span {
+  display: inline-block;
+  transform-origin: left bottom;
+  will-change: transform;
+}
+
 .auth-copy > p {
   max-width: 590px;
   margin: 24px 0 0;
@@ -367,6 +433,38 @@ a:focus-visible {
 
 .auth-preview {
   display: none;
+}
+
+.landing-scroll-cue {
+  position: absolute;
+  z-index: 4;
+  bottom: 32px;
+  left: clamp(28px, 5vw, 72px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.landing-scroll-cue i {
+  position: relative;
+  width: 42px;
+  height: 1px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.landing-scroll-cue i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #67d9a3;
+  transform-origin: left;
+  animation: landingCueSweep 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
 .preview-toolbar {
@@ -827,6 +925,7 @@ a:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+  perspective: 1200px;
 }
 
 .auth-purpose-card {
@@ -898,6 +997,7 @@ a:focus-visible {
   gap: clamp(54px, 9vw, 132px);
   align-items: start;
   margin-top: 132px;
+  min-height: 68vh;
 }
 
 .auth-how h2,
@@ -919,6 +1019,8 @@ a:focus-visible {
   gap: 20px;
   padding: 25px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  transform-origin: left center;
+  will-change: transform, opacity;
 }
 
 .auth-how-steps li:first-child {
@@ -959,6 +1061,7 @@ a:focus-visible {
   padding: 68px;
   background: #f7f7f4;
   border-radius: 26px;
+  min-height: 68vh;
 }
 
 .auth-difference h2 {
@@ -978,6 +1081,8 @@ a:focus-visible {
   color: #6e7280;
   font-size: 14px;
   line-height: 1.6;
+  transform-origin: left center;
+  will-change: transform, opacity;
 }
 
 .auth-difference-points svg {
@@ -3482,6 +3587,25 @@ a:focus-visible {
   }
 }
 
+@keyframes landingCueSweep {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  48% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  52% {
+    transform: scaleX(1);
+    transform-origin: right;
+  }
+  100% {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+}
+
 @keyframes rewriteCardFloatOne {
   0%,
   100% {
@@ -4109,6 +4233,10 @@ a:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .landing-cursor {
+    display: none !important;
+  }
+
   *,
   *::before,
   *::after {

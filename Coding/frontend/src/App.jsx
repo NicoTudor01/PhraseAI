@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { AnimatePresence, motion, useScroll, useSpring, useTransform } from "framer-motion";
 import { validateRewriteResponse } from "./rewriteResponse";
@@ -172,6 +172,220 @@ const STYLE_ITEM_MOTION = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.42, ease: AUTH_EASE_OUT } },
 };
 const STYLE_CARD_HOVER = { y: -3, transition: { duration: 0.2, ease: AUTH_EASE_OUT } };
+
+function SplitLandingHeading({ children, id, className = "" }) {
+  return (
+    <h2 id={id} className={`landing-split-heading ${className}`}>
+      {String(children || "").split(/\s+/).filter(Boolean).map((word, index) => (
+        <span className="landing-word-mask" key={`${word}-${index}`}><span>{word}</span></span>
+      ))}
+    </h2>
+  );
+}
+
+function useLandingScrollAnimations(enabled) {
+  const rootRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!enabled || !rootRef.current) return undefined;
+
+    const root = rootRef.current;
+    let disposed = false;
+    let teardown = () => {};
+
+    Promise.all([import("lenis"), import("gsap"), import("gsap/ScrollTrigger")]).then(
+      ([lenisModule, gsapModule, scrollTriggerModule]) => {
+        if (disposed) return;
+        const Lenis = lenisModule.default;
+        const { gsap } = gsapModule;
+        const { ScrollTrigger } = scrollTriggerModule;
+        gsap.registerPlugin(ScrollTrigger);
+        const media = gsap.matchMedia();
+
+        media.add("(prefers-reduced-motion: no-preference)", () => {
+      const lenis = new Lenis({
+        autoRaf: false,
+        duration: 1.08,
+        easing: (value) => Math.min(1, 1.001 - Math.pow(2, -10 * value)),
+        smoothWheel: true,
+        syncTouch: false,
+        wheelMultiplier: 0.92,
+      });
+      const updateScrollTrigger = () => ScrollTrigger.update();
+      const updateLenis = (time) => lenis.raf(time * 1000);
+      lenis.on("scroll", updateScrollTrigger);
+      gsap.ticker.add(updateLenis);
+      gsap.ticker.lagSmoothing(0);
+      let cursorCleanup = () => {};
+
+      const context = gsap.context(() => {
+        const heroTimeline = gsap.timeline({ defaults: { ease: "power3.out" } });
+        heroTimeline
+          .fromTo(".auth-copy .eyebrow", { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.55 })
+          .fromTo(".landing-hero-word > span", { yPercent: 112, rotate: 3 }, { yPercent: 0, rotate: 0, duration: 0.82, stagger: 0.065 }, "-=0.25")
+          .fromTo(".auth-copy > p", { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.7 }, "-=0.46")
+          .fromTo(".auth-benefits > span", { autoAlpha: 0, x: -14 }, { autoAlpha: 1, x: 0, duration: 0.48, stagger: 0.08 }, "-=0.42")
+          .fromTo(".landing-scroll-cue", { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.5 }, "-=0.18");
+
+        gsap.to(".landing-scroll-cue", {
+          autoAlpha: 0,
+          y: 22,
+          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "+=220", scrub: 0.6 },
+        });
+        gsap.to(".auth-floating-cards-entrance", {
+          yPercent: -17,
+          scale: 1.045,
+          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "bottom top", scrub: 1.1 },
+        });
+        gsap.to(".auth-preview", {
+          yPercent: -10,
+          scale: 1.035,
+          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "bottom top", scrub: 1.3 },
+        });
+
+        gsap.utils.toArray(".landing-split-heading").forEach((heading) => {
+          gsap.fromTo(
+            heading.querySelectorAll(".landing-word-mask > span"),
+            { yPercent: 110, rotate: 2 },
+            {
+              yPercent: 0,
+              rotate: 0,
+              stagger: 0.035,
+              ease: "power3.out",
+              scrollTrigger: { trigger: heading, start: "top 86%", end: "top 42%", scrub: 0.7 },
+            },
+          );
+        });
+
+        gsap.fromTo(
+          ".auth-purpose-card",
+          { autoAlpha: 0, y: 90, scale: 0.91, rotateX: 7 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            scale: 1,
+            rotateX: 0,
+            stagger: 0.12,
+            ease: "power3.out",
+            scrollTrigger: { trigger: ".auth-purpose-grid", start: "top 82%", end: "center 55%", scrub: 0.75 },
+          },
+        );
+
+        ScrollTrigger.matchMedia({
+          "(min-width: 761px)": () => {
+            const howSteps = gsap.utils.toArray(".auth-how-steps li");
+            const howTimeline = gsap.timeline({
+              scrollTrigger: {
+                trigger: ".auth-how",
+                start: "top 12%",
+                end: "+=1250",
+                pin: true,
+                scrub: true,
+                anticipatePin: 1,
+              },
+            });
+            howTimeline.fromTo(".auth-how-copy", { y: 54, autoAlpha: 0.35 }, { y: 0, autoAlpha: 1, duration: 0.35 });
+            howSteps.forEach((step, index) => {
+              howTimeline
+                .to(howSteps, { autoAlpha: 0.24, scale: 0.97, duration: 0.16 }, index ? "<" : undefined)
+                .to(step, { autoAlpha: 1, scale: 1.035, x: 14, duration: 0.38, ease: "power2.out" })
+                .to(step, { x: 0, duration: 0.2 });
+            });
+
+            const differencePoints = gsap.utils.toArray(".auth-difference-points p");
+            const differenceTimeline = gsap.timeline({
+              scrollTrigger: {
+                trigger: ".auth-difference",
+                start: "top 16%",
+                end: "+=760",
+                pin: true,
+                scrub: true,
+                anticipatePin: 1,
+              },
+            });
+            differenceTimeline.fromTo(".auth-difference h2", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.5 });
+            differencePoints.forEach((point) => {
+              differenceTimeline.fromTo(point, { autoAlpha: 0.18, x: 42 }, { autoAlpha: 1, x: 0, duration: 0.32, ease: "power2.out" });
+            });
+          },
+          "(max-width: 760px)": () => {
+            gsap.utils.toArray(".auth-how-steps li, .auth-difference-points p").forEach((item) => {
+              gsap.fromTo(item, { autoAlpha: 0, y: 28 }, {
+                autoAlpha: 1,
+                y: 0,
+                duration: 0.65,
+                ease: "power3.out",
+                scrollTrigger: { trigger: item, start: "top 88%", toggleActions: "play none none reverse" },
+              });
+            });
+          },
+        });
+
+        gsap.fromTo(".auth-details-cta", { autoAlpha: 0.3, y: 80, scale: 0.95 }, {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          ease: "power3.out",
+          scrollTrigger: { trigger: ".auth-details-cta", start: "top 92%", end: "top 55%", scrub: 0.8 },
+        });
+
+        const cursor = root.querySelector(".landing-cursor");
+        if (cursor && window.matchMedia("(pointer: fine)").matches) {
+          gsap.set(cursor, { xPercent: -50, yPercent: -50, autoAlpha: 0 });
+          const moveX = gsap.quickTo(cursor, "x", { duration: 0.32, ease: "power3.out" });
+          const moveY = gsap.quickTo(cursor, "y", { duration: 0.32, ease: "power3.out" });
+          let cursorVisible = false;
+          const onMove = (event) => {
+            moveX(event.clientX);
+            moveY(event.clientY);
+            if (!cursorVisible) {
+              cursorVisible = true;
+              gsap.to(cursor, { autoAlpha: 1, duration: 0.2, ease: "power2.out" });
+            }
+          };
+          const interactive = root.querySelectorAll("a, button, input, .auth-purpose-card");
+          const activate = () => cursor.classList.add("active");
+          const deactivate = () => cursor.classList.remove("active");
+          window.addEventListener("pointermove", onMove, { passive: true });
+          interactive.forEach((element) => {
+            element.addEventListener("pointerenter", activate);
+            element.addEventListener("pointerleave", deactivate);
+          });
+          cursorCleanup = () => {
+            window.removeEventListener("pointermove", onMove);
+            interactive.forEach((element) => {
+              element.removeEventListener("pointerenter", activate);
+              element.removeEventListener("pointerleave", deactivate);
+            });
+          };
+        }
+      }, root);
+
+      return () => {
+        cursorCleanup();
+        context.revert();
+        lenis.off("scroll", updateScrollTrigger);
+        gsap.ticker.remove(updateLenis);
+        lenis.destroy();
+      };
+        });
+
+        media.add("(prefers-reduced-motion: reduce)", () => {
+          gsap.set(root.querySelectorAll(".landing-hero-word > span, .landing-word-mask > span, .auth-purpose-card"), { clearProps: "all" });
+        });
+
+        teardown = () => media.revert();
+      },
+    );
+
+    return () => {
+      disposed = true;
+      teardown();
+    };
+  }, [enabled]);
+
+  return rootRef;
+}
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   // FIXED: session persistence
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
@@ -964,6 +1178,7 @@ function App() {
   const loginAttemptsRef = useRef(new Map());
   const accountName = session?.user?.email || "Client";
   const accountInitials = getInitials(accountName);
+  const landingRef = useLandingScrollAnimations(authReady && (!session?.access_token || isPasswordRecovery));
 
   useEffect(() => {
     let active = true;
@@ -1588,6 +1803,7 @@ function App() {
     return (
       <div
         className="auth-page"
+        ref={landingRef}
         data-theme={theme}
         style={{
           "--page-bg": tokens.pageBackground,
@@ -1608,6 +1824,7 @@ function App() {
           "--placeholder-color": tokens.fieldPlaceholder,
         }}
       >
+        <span className="landing-cursor" aria-hidden="true" />
         <header className="auth-topbar">
           <div className="auth-brand">
             <BrandLogoIcon light={theme === "light"} />
@@ -1636,18 +1853,22 @@ function App() {
             {...AUTH_BACKGROUND_MOTION}
           >
             {/* SCROLL-ANIM: Left-panel children enter in a deliberate headline-to-product sequence. */}
-            <motion.div className="auth-copy" variants={AUTH_LEFT_SEQUENCE} initial="hidden" animate="visible">
-              <motion.span className="eyebrow" variants={AUTH_LEFT_ITEM}>YOUR VOICE, REFINED</motion.span>
-              <motion.h1 variants={AUTH_LEFT_ITEM}>Write like yourself. Only better.</motion.h1>
-              <motion.p variants={AUTH_LEFT_ITEM}>
+            <div className="auth-copy">
+              <span className="eyebrow">YOUR VOICE, REFINED</span>
+              <h1 className="landing-hero-heading">
+                {"Write like yourself. Only better.".split(" ").map((word, index) => (
+                  <span className="landing-hero-word" key={`${word}-${index}`}><span>{word}</span></span>
+                ))}
+              </h1>
+              <p>
                 PhraseAI turns rough thoughts into clear, confident messages while learning the choices that make your writing yours.
-              </motion.p>
-              <motion.div className="auth-benefits" aria-label="Product benefits" variants={AUTH_LEFT_ITEM}>
+              </p>
+              <div className="auth-benefits" aria-label="Product benefits">
                 <span><CheckIcon /> Intent preserved</span>
                 <span><CheckIcon /> Style learned privately</span>
                 <span><CheckIcon /> Ready in seconds</span>
-              </motion.div>
-            </motion.div>
+              </div>
+            </div>
 
             {/* SCROLL-ANIM: Cards enter after the copy and retain their own 0.6x parallax layer. */}
             <motion.div className="auth-floating-cards" aria-hidden="true" style={{ y: authCardsY }}>
@@ -1690,6 +1911,7 @@ function App() {
                 <span>Private by account</span>
               </div>
             </div>
+            <div className="landing-scroll-cue" aria-hidden="true"><span>Scroll to explore</span><i /></div>
           </motion.section>
 
           {/* SCROLL-ANIM: The form panel arrives from the right and remains the natural 1x scroll anchor. */}
@@ -1864,58 +2086,51 @@ function App() {
           </motion.main>
         </div>
 
-        <motion.section
+        <section
           className="auth-details"
           aria-labelledby="auth-details-title"
-          style={{ y: authDetailsY, scale: authDetailsScale, rotate: authDetailsRotate }}
         >
-          <motion.div
-            className="auth-details-inner"
-            variants={AUTH_DETAILS_SEQUENCE}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.12 }}
-          >
-            <motion.header className="auth-details-heading" variants={AUTH_DETAILS_ITEM}>
+          <div className="auth-details-inner">
+            <header className="auth-details-heading">
               <span className="eyebrow">WRITING THAT SOUNDS LIKE YOU</span>
-              <h2 id="auth-details-title">Your thoughts, with the clarity they deserve.</h2>
+              <SplitLandingHeading id="auth-details-title">Your thoughts, with the clarity they deserve.</SplitLandingHeading>
               <p>
                 PhraseAI helps you communicate with confidence without replacing your personality.
                 It refines the message, learns from your choices, and keeps your voice at the center.
               </p>
-            </motion.header>
+            </header>
 
-            <motion.div className="auth-purpose-grid" variants={AUTH_DETAILS_SEQUENCE}>
-              <motion.article className="auth-purpose-card auth-purpose-card-featured" variants={AUTH_DETAILS_ITEM}>
+            <div className="auth-purpose-grid">
+              <article className="auth-purpose-card auth-purpose-card-featured">
                 <span className="auth-card-number">01</span>
                 <div className="auth-card-icon"><SparkleIcon /></div>
                 <h3>More than a rewrite</h3>
                 <p>
                   Improve clarity, tone, and structure while preserving the meaning and personality behind every sentence.
                 </p>
-              </motion.article>
-              <motion.article className="auth-purpose-card" variants={AUTH_DETAILS_ITEM}>
+              </article>
+              <article className="auth-purpose-card">
                 <span className="auth-card-number">02</span>
                 <div className="auth-card-icon"><ProfileIcon /></div>
                 <h3>A style that evolves</h3>
                 <p>
                   Each approved rewrite sharpens a private style profile built around your vocabulary, rhythm, and preferences.
                 </p>
-              </motion.article>
-              <motion.article className="auth-purpose-card" variants={AUTH_DETAILS_ITEM}>
+              </article>
+              <article className="auth-purpose-card">
                 <span className="auth-card-number">03</span>
                 <div className="auth-card-icon"><CheckIcon /></div>
                 <h3>Useful from day one</h3>
                 <p>
                   Start with any rough email and get a polished version immediately. Your results become more personal over time.
                 </p>
-              </motion.article>
-            </motion.div>
+              </article>
+            </div>
 
-            <motion.div className="auth-how" variants={AUTH_DETAILS_ITEM}>
+            <div className="auth-how">
               <div className="auth-how-copy">
                 <span className="eyebrow">HOW IT WORKS</span>
-                <h2>From rough draft to ready to send.</h2>
+                <SplitLandingHeading>From rough draft to ready to send.</SplitLandingHeading>
                 <p>No complicated setup. Just a simple learning loop that gets stronger whenever you use it.</p>
               </div>
               <ol className="auth-how-steps">
@@ -1932,24 +2147,24 @@ function App() {
                   <div><strong>Teach through choice</strong><p>Edit, approve, and help PhraseAI understand what sounds right.</p></div>
                 </li>
               </ol>
-            </motion.div>
+            </div>
 
-            <motion.div className="auth-difference" variants={AUTH_DETAILS_ITEM}>
+            <div className="auth-difference">
               <div>
                 <span className="eyebrow">WHY PHRASEAI</span>
-                <h2>AI should amplify your voice, not flatten it.</h2>
+                <SplitLandingHeading>AI should amplify your voice, not flatten it.</SplitLandingHeading>
               </div>
               <div className="auth-difference-points">
                 <p><CheckIcon /><span><strong>Personal by design.</strong> Your style profile belongs to your account and grows with you.</span></p>
                 <p><CheckIcon /><span><strong>Intent stays intact.</strong> The point of your message never gets lost in the polish.</span></p>
                 <p><CheckIcon /><span><strong>You stay in control.</strong> Every result is editable, reviewable, and yours to approve.</span></p>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div className="auth-details-cta" variants={AUTH_DETAILS_ITEM}>
+            <div className="auth-details-cta">
               <div>
                 <span className="eyebrow">YOUR VOICE IS THE PRODUCT</span>
-                <h2>Write with less friction and more confidence.</h2>
+                <SplitLandingHeading>Write with less friction and more confidence.</SplitLandingHeading>
               </div>
               <button
                 type="button"
@@ -1960,9 +2175,9 @@ function App() {
               >
                 Start building your style <ArrowIcon />
               </button>
-            </motion.div>
-          </motion.div>
-        </motion.section>
+            </div>
+          </div>
+        </section>
       </div>
     );
   }
