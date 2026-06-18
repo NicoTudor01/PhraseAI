@@ -216,7 +216,6 @@ function useLandingScrollAnimations(enabled) {
       lenis.on("scroll", updateScrollTrigger);
       gsap.ticker.add(updateLenis);
       gsap.ticker.lagSmoothing(0);
-      let cursorCleanup = () => {};
 
       const context = gsap.context(() => {
         const heroTimeline = gsap.timeline({ defaults: { ease: "power3.out" } });
@@ -329,40 +328,9 @@ function useLandingScrollAnimations(enabled) {
           scrollTrigger: { trigger: ".auth-details-cta", start: "top 92%", end: "top 55%", scrub: 0.8 },
         });
 
-        const cursor = root.querySelector(".landing-cursor");
-        if (cursor && window.matchMedia("(pointer: fine)").matches) {
-          gsap.set(cursor, { xPercent: -50, yPercent: -50, autoAlpha: 0 });
-          const moveX = gsap.quickTo(cursor, "x", { duration: 0.32, ease: "power3.out" });
-          const moveY = gsap.quickTo(cursor, "y", { duration: 0.32, ease: "power3.out" });
-          let cursorVisible = false;
-          const onMove = (event) => {
-            moveX(event.clientX);
-            moveY(event.clientY);
-            if (!cursorVisible) {
-              cursorVisible = true;
-              gsap.to(cursor, { autoAlpha: 1, duration: 0.2, ease: "power2.out" });
-            }
-          };
-          const interactive = root.querySelectorAll("a, button, input, .auth-purpose-card");
-          const activate = () => cursor.classList.add("active");
-          const deactivate = () => cursor.classList.remove("active");
-          window.addEventListener("pointermove", onMove, { passive: true });
-          interactive.forEach((element) => {
-            element.addEventListener("pointerenter", activate);
-            element.addEventListener("pointerleave", deactivate);
-          });
-          cursorCleanup = () => {
-            window.removeEventListener("pointermove", onMove);
-            interactive.forEach((element) => {
-              element.removeEventListener("pointerenter", activate);
-              element.removeEventListener("pointerleave", deactivate);
-            });
-          };
-        }
       }, root);
 
       return () => {
-        cursorCleanup();
         context.revert();
         lenis.off("scroll", updateScrollTrigger);
         gsap.ticker.remove(updateLenis);
@@ -1824,7 +1792,6 @@ function App() {
           "--placeholder-color": tokens.fieldPlaceholder,
         }}
       >
-        <span className="landing-cursor" aria-hidden="true" />
         <header className="auth-topbar">
           <div className="auth-brand">
             <BrandLogoIcon light={theme === "light"} />

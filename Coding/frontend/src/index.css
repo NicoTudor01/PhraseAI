@@ -197,35 +197,6 @@ a:focus-visible {
   background: #080a12;
 }
 
-.landing-cursor {
-  position: fixed;
-  z-index: 100;
-  top: 0;
-  left: 0;
-  display: none;
-  width: 13px;
-  height: 13px;
-  pointer-events: none;
-  background: #67d9a3;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 50%;
-  box-shadow: 0 0 18px rgba(103, 217, 163, 0.42);
-  mix-blend-mode: difference;
-  transition: width 220ms cubic-bezier(0.16, 1, 0.3, 1), height 220ms cubic-bezier(0.16, 1, 0.3, 1), background-color 220ms ease;
-  will-change: transform;
-}
-
-@media (pointer: fine) {
-  .landing-cursor {
-    display: block;
-  }
-
-  .landing-cursor.active {
-    width: 42px;
-    height: 42px;
-    background: rgba(103, 217, 163, 0.14);
-  }
-}
 
 /* SCROLL-ANIM: The atmospheric layer fades through Framer Motion while its existing palette breathes off-thread. */
 .auth-topbar {
@@ -4233,10 +4204,6 @@ a:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-cursor {
-    display: none !important;
-  }
-
   *,
   *::before,
   *::after {
