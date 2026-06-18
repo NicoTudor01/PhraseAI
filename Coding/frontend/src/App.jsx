@@ -33,6 +33,11 @@ const STYLE_MAP_Y_OUTPUT = [28, -34];
 const STYLE_SIDE_Y_OUTPUT = [78, -18];
 const STYLE_TIMELINE_Y_OUTPUT = [132, -10];
 const STYLE_TRAITS_Y_OUTPUT = [190, 0];
+const HISTORY_SCROLL_INPUT = [0, 760];
+const HISTORY_HERO_Y_OUTPUT = [0, -58];
+const HISTORY_HERO_SCALE_OUTPUT = [1, 0.97];
+const HISTORY_TOOLBAR_Y_OUTPUT = [42, -12];
+const HISTORY_FEED_Y_OUTPUT = [94, 0];
 const AUTH_PULL_SCROLL_INPUT = [0, 760];
 const AUTH_HERO_SCALE_OUTPUT = [1, 0.9];
 const AUTH_HERO_OPACITY_OUTPUT = [1, 0.3];
@@ -799,8 +804,9 @@ function App() {
   const authDetailsScale = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_SCALE_OUTPUT);
   const authDetailsRotate = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_ROTATE_OUTPUT);
   // SCROLL-ANIM: Track the app scroll container directly so protected pages get the same layered pull as login.
-  const { scrollY: appScrollY } = useScroll({ container: appContentRef });
+  const { scrollY: appScrollY, scrollYProgress: appScrollProgress } = useScroll({ container: appContentRef });
   const smoothAppScrollY = useSpring(appScrollY, APP_SCROLL_SPRING);
+  const smoothAppScrollProgress = useSpring(appScrollProgress, APP_SCROLL_SPRING);
   const styleHeroY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_HERO_Y_OUTPUT);
   const styleHeroScale = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_HERO_SCALE_OUTPUT);
   const styleHeroOpacity = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_HERO_OPACITY_OUTPUT);
@@ -808,6 +814,10 @@ function App() {
   const styleSideY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_SIDE_Y_OUTPUT);
   const styleTimelineY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_TIMELINE_Y_OUTPUT);
   const styleTraitsY = useTransform(smoothAppScrollY, STYLE_SCROLL_INPUT, STYLE_TRAITS_Y_OUTPUT);
+  const historyHeroY = useTransform(smoothAppScrollY, HISTORY_SCROLL_INPUT, HISTORY_HERO_Y_OUTPUT);
+  const historyHeroScale = useTransform(smoothAppScrollY, HISTORY_SCROLL_INPUT, HISTORY_HERO_SCALE_OUTPUT);
+  const historyToolbarY = useTransform(smoothAppScrollY, HISTORY_SCROLL_INPUT, HISTORY_TOOLBAR_Y_OUTPUT);
+  const historyFeedY = useTransform(smoothAppScrollY, HISTORY_SCROLL_INPUT, HISTORY_FEED_Y_OUTPUT);
   const [draft, setDraft] = useState("");
   const [contextText, setContextText] = useState("");
   const [showContext, setShowContext] = useState(false);
@@ -831,6 +841,8 @@ function App() {
   const [expandedHistoryIds, setExpandedHistoryIds] = useState({});
   const [manualEditIds, setManualEditIds] = useState({});
   const [manualEditDrafts, setManualEditDrafts] = useState({});
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyFilter, setHistoryFilter] = useState("all");
   // FIXER: [CHANGED] Feedback state is row-specific so independent history entries can update concurrently.
   const [feedbackBusyIds, setFeedbackBusyIds] = useState({});
   const [feedbackMessages, setFeedbackMessages] = useState({});
@@ -2045,10 +2057,78 @@ function App() {
   }
 
   function renderHistory() {
-    // FRONTEND: Keep the history route useful by rendering the same durable email records as Style Profile.
+    const entries = styleData.emailHistory;
+    const normalizedQuery = historyQuery.trim().toLowerCase();
+    const feedbackFor = (entry) => typeof entry.feedback === "string"
+      ? entry.feedback
+      : entry.feedback?.rating || entry.feedback?.style_rating || "";
+    const filteredEntries = entries.filter((entry) => {
+      const feedback = feedbackFor(entry);
+      const matchesFilter = historyFilter === "all"
+        || (historyFilter === "unrated" ? !feedback : feedback === historyFilter);
+      if (!matchesFilter) return false;
+      if (!normalizedQuery) return true;
+      const searchable = [entry.original_text, entry.original, entry.draft, entry.final_version, entry.generated_rewrite, entry.rewrite]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(normalizedQuery);
+    });
+    const ratedCount = entries.filter((entry) => Boolean(feedbackFor(entry))).length;
+    const approvedCount = entries.filter((entry) => feedbackFor(entry) === "good").length;
+    const learnedTraits = new Set(entries.flatMap((entry) => entry.influenced_traits || entry.traits || [])).size;
+
     return (
-      <div className="style-page style-page-history">
-        <EmailHistoryFeed expanded />
+      <div className="style-page style-page-history history-page-rebuild">
+        <motion.section className="history-hero" style={{ y: historyHeroY, scale: historyHeroScale }}>
+          <motion.div variants={STYLE_ITEM_MOTION} initial="hidden" animate="visible">
+            <span className="eyebrow">YOUR WRITING MEMORY</span>
+            <h2>Every rewrite leaves your voice clearer.</h2>
+            <p>Review the decisions that shaped your profile, compare your drafts, and teach PhraseAI what sounds unmistakably like you.</p>
+          </motion.div>
+          <motion.div className="history-stat-grid" variants={STYLE_SECTION_MOTION} initial="hidden" animate="visible">
+            {[
+              [entries.length, "rewrites saved"],
+              [ratedCount, "responses rated"],
+              [learnedTraits, "traits shaped"],
+            ].map(([value, label]) => (
+              <motion.div key={label} variants={STYLE_ITEM_MOTION} whileHover={STYLE_CARD_HOVER}>
+                <strong>{value}</strong><span>{label}</span>
+              </motion.div>
+            ))}
+          </motion.div>
+          <span className="history-approval-signal"><i style={{ width: `${entries.length ? Math.round((approvedCount / entries.length) * 100) : 0}%` }} />{approvedCount} approved rewrites</span>
+        </motion.section>
+
+        <motion.section className="history-command-bar" style={{ y: historyToolbarY }}>
+          <label className="history-search">
+            <span>Search</span>
+            <input
+              type="search"
+              value={historyQuery}
+              onChange={(event) => setHistoryQuery(event.target.value)}
+              placeholder="Search original or rewritten text"
+            />
+          </label>
+          <div className="history-filter-row" role="group" aria-label="Filter rewrite history">
+            {["all", "good", "off", "edited", "unrated"].map((filter) => (
+              <button
+                type="button"
+                key={filter}
+                className={historyFilter === filter ? "active" : ""}
+                aria-pressed={historyFilter === filter}
+                onClick={() => setHistoryFilter(filter)}
+              >
+                {titleCase(filter)}
+              </button>
+            ))}
+          </div>
+          <span className="history-result-count">{filteredEntries.length} of {entries.length}</span>
+        </motion.section>
+
+        <motion.div style={{ y: historyFeedY }}>
+          <EmailHistoryFeed expanded entriesOverride={filteredEntries} />
+        </motion.div>
       </div>
     );
   }
@@ -2089,8 +2169,9 @@ function App() {
     );
   }
 
-  function EmailHistoryFeed({ expanded = false }) {
-    const entries = styleData.emailHistory;
+  function EmailHistoryFeed({ expanded = false, entriesOverride = null }) {
+    const entries = entriesOverride ?? styleData.emailHistory;
+    const isFilteredEmpty = Array.isArray(entriesOverride) && entries.length === 0 && styleData.emailHistory.length > 0;
 
     if (styleDataLoading) {
       return (
@@ -2129,9 +2210,13 @@ function App() {
         ) : entries.length === 0 ? (
           <div className="style-state">
             <span className="style-state-mark"><HistoryIcon /></span>
-            <strong>No finalized emails yet</strong>
-            <p>Use a rewritten version and it will appear here with the traits it helped shape.</p>
-            <button type="button" className="secondary-button" onClick={() => setActiveSection("home")}>Write your first email</button>
+            <strong>{isFilteredEmpty ? "No rewrites match this view" : "No finalized emails yet"}</strong>
+            <p>{isFilteredEmpty ? "Try another search or feedback filter." : "Use a rewritten version and it will appear here with the traits it helped shape."}</p>
+            {isFilteredEmpty ? (
+              <button type="button" className="secondary-button" onClick={() => { setHistoryQuery(""); setHistoryFilter("all"); }}>Clear filters</button>
+            ) : (
+              <button type="button" className="secondary-button" onClick={() => setActiveSection("home")}>Write your first email</button>
+            )}
           </div>
         ) : (
           <div className="email-history-scroll">
@@ -2160,8 +2245,8 @@ function App() {
                   transition={{ duration: 0.38, delay: Math.min(index * 0.04, 0.18), ease: AUTH_EASE_OUT }}
                 >
                   <div className="email-history-meta">
-                    <span>{formatDate(entry.finalized_at || entry.submitted_at || entry.created_at)}</span>
-                    {traits.length ? <span>{traits.length} traits influenced</span> : <span>Profile signal</span>}
+                    <span><b>#{String(styleData.emailHistory.indexOf(entry) + 1).padStart(2, "0")}</b>{formatDate(entry.finalized_at || entry.submitted_at || entry.created_at)}</span>
+                    <span className={`history-learning-state ${feedback || "unrated"}`}>{feedback ? titleCase(feedback) : "Awaiting feedback"}</span>
                   </div>
                   <div className="email-compare">
                     <div>
@@ -2647,6 +2732,7 @@ function App() {
         </motion.header>
 
         <div className="app-content" ref={appContentRef}>
+          <motion.div className="app-scroll-progress" style={{ scaleX: smoothAppScrollProgress }} aria-hidden="true" />
           <AnimatePresence mode="wait">
             <motion.div className="app-section-frame" key={activeSection} {...APP_SECTION_MOTION}>
               {isHome ? renderHome() : null}
