@@ -1797,6 +1797,11 @@ function App() {
             <BrandLogoIcon light={theme === "light"} />
             <span>PhraseAI</span>
           </div>
+          <nav className="landing-nav" aria-label="Landing page">
+            <a href="#purpose">Why PhraseAI</a>
+            <a href="#how-it-works">How it works</a>
+            <a href="#get-started">Get started</a>
+          </nav>
           <button
             type="button"
             className="icon-button"
@@ -2055,6 +2060,7 @@ function App() {
 
         <section
           className="auth-details"
+          id="purpose"
           aria-labelledby="auth-details-title"
         >
           <div className="auth-details-inner">
@@ -2094,7 +2100,7 @@ function App() {
               </article>
             </div>
 
-            <div className="auth-how">
+            <div className="auth-how" id="how-it-works">
               <div className="auth-how-copy">
                 <span className="eyebrow">HOW IT WORKS</span>
                 <SplitLandingHeading>From rough draft to ready to send.</SplitLandingHeading>
@@ -2128,7 +2134,7 @@ function App() {
               </div>
             </div>
 
-            <div className="auth-details-cta">
+            <div className="auth-details-cta" id="get-started">
               <div>
                 <span className="eyebrow">YOUR VOICE IS THE PRODUCT</span>
                 <SplitLandingHeading>Write with less friction and more confidence.</SplitLandingHeading>
@@ -2143,6 +2149,17 @@ function App() {
                 Start building your style <ArrowIcon />
               </button>
             </div>
+            <footer className="landing-footer">
+              <div className="landing-footer-brand">
+                <BrandLogoIcon />
+                <div><strong>PhraseAI</strong><span>Your voice, refined.</span></div>
+              </div>
+              <p>Write with clarity without losing what makes the message yours.</p>
+              <div className="landing-footer-links">
+                <a href="mailto:support@phraseai.app">Support</a>
+                <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>Back to top</button>
+              </div>
+            </footer>
           </div>
         </section>
       </div>
@@ -2423,36 +2440,55 @@ function App() {
 
   function renderSettings() {
     return (
-      <div className="rounded-2xl border p-6" style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}>
-        <div className="grid gap-3 md:grid-cols-2">
-          {[
-            { key: "dark", label: "Dark", description: "High contrast dark workspace." },
-            { key: "light", label: "Light", description: "Bright paper-like workspace." },
-          ].map((item) => {
-            const active = theme === item.key;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setTheme(item.key)}
-                className="rounded-xl border p-4 text-left transition-all duration-150 cursor-pointer"
-                style={
-                  active
-                    ? { backgroundColor: tokens.activeNavBg, color: tokens.activeNavText, borderColor: tokens.activeNavBg }
-                    : { backgroundColor: tokens.inactiveNavBg, color: tokens.text, borderColor: tokens.border }
-                }
-              >
-                <div className="text-sm font-semibold">{item.label}</div>
-                <div className="mt-1 text-xs" style={{ color: active ? tokens.activeNavMeta : tokens.muted }}>
-                  {item.description}
-                </div>
-              </button>
-            );
-          })}
+      <div className="product-page settings-page">
+        <motion.section className="product-page-hero" variants={STYLE_SECTION_MOTION} initial="hidden" animate="visible">
+          <motion.div variants={STYLE_ITEM_MOTION}>
+            <span className="eyebrow">PERSONAL WORKSPACE</span>
+            <h2>Make PhraseAI feel like yours.</h2>
+            <p>Choose how the workspace looks and which writing goal should be ready when you begin.</p>
+          </motion.div>
+          <motion.div className="settings-current" variants={STYLE_ITEM_MOTION}>
+            <span className={`theme-orb ${theme}`} />
+            <small>Current experience</small>
+            <strong>{titleCase(theme)} mode</strong>
+          </motion.div>
+        </motion.section>
+
+        <div className="product-page-grid">
+          <motion.section className="preference-panel preference-panel-wide" {...APP_SECTION_MOTION}>
+            <div className="preference-heading"><span>01</span><div><h3>Appearance</h3><p>Set the visual tone of your writing environment.</p></div></div>
+            <div className="theme-choice-grid">
+              {[{ key: "dark", label: "Midnight", description: "Focused, cinematic, high contrast." }, { key: "light", label: "Paper", description: "Bright, calm, editorial clarity." }].map((item) => {
+                const active = theme === item.key;
+                return (
+                  <motion.button key={item.key} type="button" className={active ? "theme-choice active" : "theme-choice"} onClick={() => setTheme(item.key)} whileHover={{ y: -3 }} whileTap={APP_BUTTON_TAP}>
+                    <span className={`theme-preview ${item.key}`}><i /><i /><i /></span>
+                    <strong>{item.label}</strong><small>{item.description}</small>
+                    <b>{active ? "Selected" : "Choose"}</b>
+                  </motion.button>
+                );
+              })}
+            </div>
+          </motion.section>
+
+          <motion.section className="preference-panel" {...APP_SECTION_MOTION}>
+            <div className="preference-heading"><span>02</span><div><h3>Default rewrite</h3><p>Choose the goal waiting on your next draft.</p></div></div>
+            <div className="default-mode-list">
+              {MODES.map((item) => (
+                <button type="button" key={item.key} className={mode === item.key ? "active" : ""} onClick={() => setMode(item.key)}>
+                  <span><strong>{item.label}</strong><small>{item.description}</small></span><i>{mode === item.key ? "Ready" : ""}</i>
+                </button>
+              ))}
+            </div>
+          </motion.section>
+
+          <motion.section className="preference-panel privacy-panel" {...APP_SECTION_MOTION}>
+            <div className="privacy-mark"><CheckIcon /></div>
+            <span className="eyebrow">PRIVATE BY DESIGN</span>
+            <h3>Your profile stays attached to your account.</h3>
+            <p>History, feedback, and learned writing signals remain isolated to your authenticated workspace.</p>
+          </motion.section>
         </div>
-        <p className="mt-6 text-xs" style={{ color: tokens.muted }}>
-          Theme changes are applied instantly for this session.
-        </p>
       </div>
     );
   }
@@ -2847,45 +2883,33 @@ function App() {
     const accountCreated = session?.user?.created_at ? new Date(session.user.created_at).toLocaleString() : "Unknown";
 
     return (
-      <div className="rounded-2xl border p-6" style={{ backgroundColor: tokens.surface, borderColor: tokens.border }}>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-            <p className="text-xs" style={{ color: tokens.muted }}>Email</p>
-            <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{session?.user?.email || "Unknown"}</p>
-          </div>
-          <div className="rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-            <p className="text-xs" style={{ color: tokens.muted }}>Member since</p>
-            <p className="mt-1 text-sm font-semibold" style={{ color: tokens.text }}>{accountCreated}</p>
-          </div>
+      <div className="product-page account-page">
+        <motion.section className="account-hero" variants={STYLE_SECTION_MOTION} initial="hidden" animate="visible">
+          <motion.div className="account-hero-avatar" variants={STYLE_ITEM_MOTION}>{accountInitials}</motion.div>
+          <motion.div variants={STYLE_ITEM_MOTION}><span className="eyebrow">PHRASEAI MEMBER</span><h2>{metadata.full_name || metadata.name || session?.user?.email?.split("@")[0] || "Your account"}</h2><p>{session?.user?.email || "Email unavailable"}</p></motion.div>
+          <motion.span className="account-status" variants={STYLE_ITEM_MOTION}><i /> Secure session</motion.span>
+        </motion.section>
+
+        <div className="account-detail-grid">
+          <motion.section className="account-detail-card" {...APP_SECTION_MOTION}><span>EMAIL ADDRESS</span><strong>{session?.user?.email || "Unknown"}</strong><p>Used for secure access and account recovery.</p></motion.section>
+          <motion.section className="account-detail-card" {...APP_SECTION_MOTION}><span>MEMBER SINCE</span><strong>{accountCreated}</strong><p>Your writing profile has been evolving since this date.</p></motion.section>
+          <motion.section className="account-detail-card account-id-card" {...APP_SECTION_MOTION}><span>ACCOUNT ID</span><strong>{session?.user?.id || "Unavailable"}</strong><p>A private identifier used to isolate your PhraseAI data.</p></motion.section>
         </div>
 
-        <div className="mt-4 rounded-xl border p-4" style={{ borderColor: tokens.border, backgroundColor: tokens.fieldBg }}>
-          <p className="text-xs" style={{ color: tokens.muted }}>Profile details</p>
-          <p className="mt-1 text-sm" style={{ color: tokens.text }}>Display name: {metadata.full_name || metadata.name || "Not set"}</p>
-          <p className="mt-1 text-sm" style={{ color: tokens.soft }}>User ID: {session?.user?.id || "Unavailable"}</p>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveSection("home")}
-            className="rounded-lg border px-3 py-2 text-xs font-semibold"
-            style={{ borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }}
-          >
-            Back to Workspace
-          </button>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="rounded-lg border px-3 py-2 text-xs font-semibold"
-            style={{ borderColor: tokens.border, color: tokens.secondaryText, backgroundColor: tokens.secondaryBg }}
-          >
-            Sign out
-          </button>
-        </div>
+        <motion.section className="account-actions-panel" {...APP_SECTION_MOTION}>
+          <div><span className="eyebrow">SESSION CONTROL</span><h3>You are signed in securely.</h3><p>Return to your workspace or end this session on the current device.</p></div>
+          <div className="account-actions">
+            <button type="button" className="secondary-button" onClick={() => setActiveSection("home")}>Back to Workspace</button>
+            <button type="button" className="account-signout" onClick={handleSignOut}>Sign out</button>
+          </div>
+        </motion.section>
       </div>
     );
   }
+
+  const sectionOrder = ["home", "history", "style-profile", "settings", "account"];
+  const sectionPosition = String(sectionOrder.indexOf(activeSection) + 1).padStart(2, "0");
+  const sectionTotal = String(sectionOrder.length).padStart(2, "0");
 
   const sectionMeta = {
     home: { title: "Rewrite Emails In Your Voice", sub: "Pick a mode, generate a stronger draft, and refine it inline." },
@@ -3003,12 +3027,13 @@ function App() {
         <motion.div className="app-header-motion" style={{ y: appHeaderY, opacity: appHeaderOpacity }}>
           <motion.header className="app-header" {...APP_HEADER_MOTION}>
             <div className="app-header-row">
-              <div>
+              <div className="app-header-copy">
                 <span className="eyebrow">{activeSection === "home" ? "WORKSPACE" : activeSection.replace("-", " ").toUpperCase()}</span>
                 <h1>{currentMeta.title}</h1>
                 <p>{currentMeta.sub}</p>
               </div>
-              <div className="app-header-actions">
+            <div className="app-header-actions">
+                <span className="app-section-number"><b>{sectionPosition}</b> / {sectionTotal}</span>
                 {aiInfo?.model ? (
                   <span className="model-status" title={aiInfo.model}>
                     <span />
