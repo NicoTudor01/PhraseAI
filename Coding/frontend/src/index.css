@@ -1053,6 +1053,15 @@ a:focus-visible {
   will-change: transform, opacity;
 }
 
+.auth-how-steps small {
+  display: block;
+  margin-bottom: 7px;
+  color: rgba(103, 217, 163, 0.66);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+}
+
 .auth-how-steps li:first-child {
   padding-top: 0;
 }
@@ -1080,6 +1089,116 @@ a:focus-visible {
   color: rgba(232, 236, 247, 0.56);
   font-size: 13px;
   line-height: 1.55;
+}
+
+.auth-how-demo {
+  position: relative;
+  overflow: hidden;
+  margin-top: 30px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(103, 217, 163, 0.11), transparent 32%),
+    rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+}
+
+.auth-demo-topbar,
+.auth-demo-traits {
+  display: flex;
+  align-items: center;
+}
+
+.auth-demo-topbar {
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auth-demo-topbar > span {
+  display: flex;
+  gap: 5px;
+}
+
+.auth-demo-topbar i {
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+}
+
+.auth-demo-topbar strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #89e5b8;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+.auth-demo-topbar svg,
+.auth-demo-flow svg {
+  width: 12px;
+  height: 12px;
+}
+
+.auth-demo-message {
+  padding: 16px 2px 12px;
+}
+
+.auth-demo-message > span {
+  color: rgba(232, 236, 247, 0.38);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.15em;
+}
+
+.auth-demo-message p {
+  margin: 8px 0 0;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.auth-demo-refined p {
+  color: #ffffff;
+}
+
+.auth-demo-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #67d9a3;
+  transform-origin: left center;
+}
+
+.auth-demo-flow span {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(103, 217, 163, 0.7), rgba(103, 217, 163, 0));
+}
+
+.auth-demo-traits {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 13px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auth-demo-traits span {
+  padding: 5px 8px;
+  color: rgba(232, 236, 247, 0.68);
+  font-size: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.auth-demo-traits strong {
+  margin-left: auto;
+  color: #89e5b8;
+  font-size: 9px;
 }
 
 .auth-difference {

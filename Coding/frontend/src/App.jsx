@@ -299,7 +299,7 @@ function useLandingScrollAnimations(enabled) {
               scrollTrigger: {
                 trigger: ".auth-how",
                 start: "top 12%",
-                end: () => `+=${Math.min(window.innerHeight * 1.05, 900)}`,
+                end: () => `+=${Math.min(window.innerHeight * 1.35, 1050)}`,
                 pin: true,
                 scrub: 0.7,
                 anticipatePin: 1,
@@ -307,7 +307,12 @@ function useLandingScrollAnimations(enabled) {
                 id: "landing-how",
               },
             });
-            howTimeline.fromTo(".auth-how-copy", { y: 54, autoAlpha: 0.35 }, { y: 0, autoAlpha: 1, duration: 0.35 });
+            howTimeline
+              .fromTo(".auth-how-copy", { y: 54, autoAlpha: 0.35 }, { y: 0, autoAlpha: 1, duration: 0.32 })
+              .fromTo(".auth-how-demo", { y: 36, autoAlpha: 0, scale: 0.96 }, { y: 0, autoAlpha: 1, scale: 1, duration: 0.32 }, "<0.12")
+              .fromTo(".auth-demo-flow", { scaleX: 0 }, { scaleX: 1, duration: 0.22, ease: "power2.out" })
+              .fromTo(".auth-demo-refined", { clipPath: "inset(0 100% 0 0)", autoAlpha: 0.4 }, { clipPath: "inset(0 0% 0 0)", autoAlpha: 1, duration: 0.42 })
+              .fromTo(".auth-demo-traits span", { y: 12, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.06, duration: 0.24 });
             howSteps.forEach((step, index) => {
               howTimeline
                 .to(howSteps, { autoAlpha: 0.24, scale: 0.97, duration: 0.16 }, index ? "<" : undefined)
@@ -2134,19 +2139,37 @@ function App() {
                 <span className="eyebrow">HOW IT WORKS</span>
                 <SplitLandingHeading>From rough draft to ready to send.</SplitLandingHeading>
                 <p>No complicated setup. Just a simple learning loop that gets stronger whenever you use it.</p>
+                <div className="auth-how-demo" aria-label="PhraseAI rewrite example">
+                  <div className="auth-demo-topbar">
+                    <span><i /><i /><i /></span>
+                    <strong><SparkleIcon /> Live rewrite</strong>
+                  </div>
+                  <div className="auth-demo-message auth-demo-original">
+                    <span>ROUGH THOUGHT</span>
+                    <p>Hey, just checking if you had time to look at the proposal?</p>
+                  </div>
+                  <div className="auth-demo-flow"><SparkleIcon /><span /></div>
+                  <div className="auth-demo-message auth-demo-refined">
+                    <span>REFINED IN YOUR VOICE</span>
+                    <p>Hi Maya, I wanted to follow up on the proposal I shared last week. Let me know if I can clarify anything.</p>
+                  </div>
+                  <div className="auth-demo-traits">
+                    <span>Warm</span><span>Direct</span><span>Clear</span><strong>92% style match</strong>
+                  </div>
+                </div>
               </div>
               <ol className="auth-how-steps">
                 <li>
                   <span>1</span>
-                  <div><strong>Write naturally</strong><p>Paste a draft exactly as it comes to mind.</p></div>
+                  <div><small>CAPTURE</small><strong>Write naturally</strong><p>Paste a draft exactly as it comes to mind. No templates, prompts, or setup required.</p></div>
                 </li>
                 <li>
                   <span>2</span>
-                  <div><strong>Choose your goal</strong><p>Make it professional, sharper, or simply correct.</p></div>
+                  <div><small>REFINE</small><strong>Choose your goal</strong><p>Make it professional, sharper, or simply correct while preserving the meaning underneath.</p></div>
                 </li>
                 <li>
                   <span>3</span>
-                  <div><strong>Teach through choice</strong><p>Edit, approve, and help PhraseAI understand what sounds right.</p></div>
+                  <div><small>LEARN</small><strong>Teach through choice</strong><p>Edit or approve the result. Every decision helps PhraseAI understand what sounds right to you.</p></div>
                 </li>
               </ol>
             </div>
