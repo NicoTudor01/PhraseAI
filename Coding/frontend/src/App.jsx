@@ -217,6 +217,24 @@ function useLandingScrollAnimations(enabled) {
       gsap.ticker.add(updateLenis);
       gsap.ticker.lagSmoothing(0);
 
+      const anchorLinks = Array.from(root.querySelectorAll('.landing-nav a[href^="#"]'));
+      const handleAnchorClick = (event) => {
+        const target = root.querySelector(event.currentTarget.getAttribute("href"));
+        if (!target) return;
+        event.preventDefault();
+        lenis.scrollTo(target, { offset: -72, duration: 1.25 });
+      };
+      anchorLinks.forEach((link) => link.addEventListener("click", handleAnchorClick));
+
+      let refreshFrame = 0;
+      const scheduleRefresh = () => {
+        cancelAnimationFrame(refreshFrame);
+        refreshFrame = requestAnimationFrame(() => ScrollTrigger.refresh());
+      };
+      const resizeObserver = new ResizeObserver(scheduleRefresh);
+      resizeObserver.observe(root);
+      window.addEventListener("load", scheduleRefresh);
+
       const context = gsap.context(() => {
         const heroTimeline = gsap.timeline({ defaults: { ease: "power3.out" } });
         heroTimeline
@@ -277,10 +295,11 @@ function useLandingScrollAnimations(enabled) {
               scrollTrigger: {
                 trigger: ".auth-how",
                 start: "top 12%",
-                end: "+=1250",
+                end: () => `+=${Math.min(window.innerHeight * 1.05, 900)}`,
                 pin: true,
-                scrub: true,
+                scrub: 0.7,
                 anticipatePin: 1,
+                invalidateOnRefresh: true,
               },
             });
             howTimeline.fromTo(".auth-how-copy", { y: 54, autoAlpha: 0.35 }, { y: 0, autoAlpha: 1, duration: 0.35 });
@@ -295,14 +314,15 @@ function useLandingScrollAnimations(enabled) {
             const differenceTimeline = gsap.timeline({
               scrollTrigger: {
                 trigger: ".auth-difference",
-                start: "top 16%",
-                end: "+=760",
-                pin: true,
-                scrub: true,
-                anticipatePin: 1,
+                start: "top 82%",
+                end: "center 46%",
+                scrub: 0.75,
+                invalidateOnRefresh: true,
               },
             });
-            differenceTimeline.fromTo(".auth-difference h2", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.5 });
+            differenceTimeline
+              .fromTo(".auth-difference", { y: 88, scale: 0.955 }, { y: 0, scale: 1, duration: 0.48, ease: "power2.out" })
+              .fromTo(".auth-difference h2", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.5 }, "<0.08");
             differencePoints.forEach((point) => {
               differenceTimeline.fromTo(point, { autoAlpha: 0.18, x: 42 }, { autoAlpha: 1, x: 0, duration: 0.32, ease: "power2.out" });
             });
@@ -332,6 +352,10 @@ function useLandingScrollAnimations(enabled) {
 
       return () => {
         context.revert();
+        cancelAnimationFrame(refreshFrame);
+        resizeObserver.disconnect();
+        window.removeEventListener("load", scheduleRefresh);
+        anchorLinks.forEach((link) => link.removeEventListener("click", handleAnchorClick));
         lenis.off("scroll", updateScrollTrigger);
         gsap.ticker.remove(updateLenis);
         lenis.destroy();

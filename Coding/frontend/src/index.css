@@ -225,13 +225,20 @@ a:focus-visible {
   left: 50%;
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 8px;
+  padding: 7px;
+  background: rgba(8, 10, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.16);
   transform: translateX(-50%);
+  backdrop-filter: blur(18px);
 }
 
 .landing-nav a {
   position: relative;
-  color: rgba(255, 255, 255, 0.58);
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.04em;
@@ -242,9 +249,9 @@ a:focus-visible {
 .landing-nav a::after {
   content: "";
   position: absolute;
-  right: 0;
-  bottom: -7px;
-  left: 0;
+  bottom: 3px;
+  left: 12px;
+  right: 12px;
   height: 1px;
   background: #67d9a3;
   transform: scaleX(0);
@@ -1004,12 +1011,24 @@ a:focus-visible {
 }
 
 .auth-how {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(420px, 1.15fr);
   gap: clamp(54px, 9vw, 132px);
   align-items: start;
   margin-top: 132px;
   min-height: 68vh;
+}
+
+.auth-how::before {
+  content: "";
+  position: absolute;
+  top: -42px;
+  left: 0;
+  width: 54px;
+  height: 2px;
+  background: linear-gradient(90deg, #67d9a3, rgba(103, 217, 163, 0));
+  box-shadow: 0 0 24px rgba(103, 217, 163, 0.34);
 }
 
 .auth-how h2,
