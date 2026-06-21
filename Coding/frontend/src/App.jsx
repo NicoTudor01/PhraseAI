@@ -219,10 +219,14 @@ function useLandingScrollAnimations(enabled) {
 
       const anchorLinks = Array.from(root.querySelectorAll('.landing-nav a[href^="#"]'));
       const handleAnchorClick = (event) => {
-        const target = root.querySelector(event.currentTarget.getAttribute("href"));
+        const href = event.currentTarget.getAttribute("href");
+        const target = root.querySelector(href);
         if (!target) return;
         event.preventDefault();
-        lenis.scrollTo(target, { offset: -72, duration: 1.25 });
+        const pinnedTrigger = href === "#how-it-works" ? ScrollTrigger.getById("landing-how") : null;
+        const destination = pinnedTrigger ? pinnedTrigger.start + 1 : target;
+        window.history.replaceState(null, "", href);
+        lenis.scrollTo(destination, { offset: pinnedTrigger ? 0 : -72, duration: 1.25 });
       };
       anchorLinks.forEach((link) => link.addEventListener("click", handleAnchorClick));
 
@@ -300,6 +304,7 @@ function useLandingScrollAnimations(enabled) {
                 scrub: 0.7,
                 anticipatePin: 1,
                 invalidateOnRefresh: true,
+                id: "landing-how",
               },
             });
             howTimeline.fromTo(".auth-how-copy", { y: 54, autoAlpha: 0.35 }, { y: 0, autoAlpha: 1, duration: 0.35 });
