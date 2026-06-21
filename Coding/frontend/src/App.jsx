@@ -152,6 +152,10 @@ const STYLE_ITEM_MOTION = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.42, ease: AUTH_EASE_OUT } },
 };
 const STYLE_CARD_HOVER = { y: -3, transition: { duration: 0.2, ease: AUTH_EASE_OUT } };
+const UTILITY_CARD_MOTION = {
+  hidden: { opacity: 0, y: 34, rotateY: -5, scale: 0.975 },
+  visible: { opacity: 1, y: 0, rotateY: 0, scale: 1, transition: { duration: 0.62, ease: AUTH_EASE_OUT } },
+};
 
 function SplitLandingHeading({ children, id, className = "" }) {
   return (
@@ -986,12 +990,12 @@ function ScrollScene({ containerRef, className = "", label = "", chapter = "", c
     target: sceneRef,
     offset: ["start end", "end start"],
   });
-  const progress = useSpring(scrollYProgress, { stiffness: 76, damping: 22, mass: 0.96, restDelta: 0.001 });
-  const y = useTransform(progress, [0, 0.13, 0.28, 0.76, 1], [148, 74, 0, 0, -108]);
-  const scale = useTransform(progress, [0, 0.18, 0.3, 0.76, 1], [0.86, 0.96, 1, 1, 0.945]);
-  const scaleY = useTransform(progress, [0, 0.18, 0.3, 0.78, 0.92, 1], [0.9, 1.025, 1, 1, 1.045, 0.98]);
-  const opacity = useTransform(progress, [0, 0.12, 0.25, 0.84, 1], [0.08, 0.55, 1, 1, 0.25]);
-  const rotateX = useTransform(progress, [0, 0.2, 0.32, 0.78, 1], [8, 2.5, 0, 0, -4]);
+  const progress = useSpring(scrollYProgress, { stiffness: 82, damping: 28, mass: 0.9, restDelta: 0.001 });
+  const y = useTransform(progress, [0, 0.14, 0.28, 0.78, 1], [120, 56, 0, 0, -74]);
+  const scale = useTransform(progress, [0, 0.18, 0.3, 0.78, 1], [0.9, 0.97, 1, 1, 0.97]);
+  const scaleY = useTransform(progress, [0, 0.22, 0.78, 1], [0.97, 1, 1, 0.99]);
+  const opacity = useTransform(progress, [0, 0.12, 0.25, 0.86, 1], [0.12, 0.62, 1, 1, 0.32]);
+  const rotateX = useTransform(progress, [0, 0.2, 0.32, 0.8, 1], [5, 1.5, 0, 0, -2]);
   const accentX = useTransform(progress, [0, 1], ["-35%", "135%"]);
   const clipPath = useTransform(
     progress,
@@ -1000,7 +1004,7 @@ function ScrollScene({ containerRef, className = "", label = "", chapter = "", c
   );
   const tetherScale = useTransform(progress, [0, 0.36, 0.7, 0.92, 1], [0, 0, 0.35, 1, 0.18]);
   const tetherOpacity = useTransform(progress, [0, 0.48, 0.7, 0.92, 1], [0, 0, 0.8, 1, 0]);
-  const tetherNodeY = useTransform(progress, [0.48, 0.92], [0, 210]);
+  const tetherNodeY = useTransform(progress, [0.48, 0.92], [0, 180]);
   const pullCopyY = useTransform(progress, [0.5, 0.88], [18, 0]);
 
   return (
@@ -2209,7 +2213,81 @@ function App() {
   }
 
   function renderHome() {
+    const quickIntents = [
+      { label: "Follow up", note: "Warm and clear", mode: "more_professional", draft: "Hi, I wanted to follow up and see if you had a chance to review my last message. Let me know if I can clarify anything." },
+      { label: "Make an ask", note: "Direct, not demanding", mode: "sound_smarter", draft: "Hi, could you please send me the updated details by Friday? That will help us keep everything on schedule." },
+      { label: "Decline politely", note: "Respectful and firm", mode: "more_professional", draft: "Thank you for thinking of me. I am not able to take this on right now, but I appreciate the invitation." },
+      { label: "Send an update", note: "Concise and useful", mode: "sound_smarter", draft: "Quick update: the project is moving forward as planned. I will share the final version once the remaining review is complete." },
+    ];
+    const recentEntry = styleData.emailHistory[0];
+    const recentOriginal = recentEntry?.original_text || recentEntry?.original || recentEntry?.draft || "";
+    const homePersona = styleData.personaLabel || styleData.currentStyle?.persona_label || "Emerging Voice";
+    const homeStrength = Math.round((Number(styleData.styleStrength) || 0) * 100);
+    const firstStyleTag = styleData.styleTags?.[0];
+    const learnedSignal = typeof firstStyleTag === "string"
+      ? firstStyleTag
+      : firstStyleTag?.label || firstStyleTag?.tag || firstStyleTag?.name || "your preferred tone";
+    const beginIntent = (intent) => {
+      setDraft(intent.draft);
+      setMode(intent.mode);
+      setRewritten("");
+      setLastAiOutput("");
+      requestAnimationFrame(() => {
+        appContentRef.current?.querySelector(".home-composer-scene")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    };
+
     return (
+      <div className="home-page">
+        <ScrollScene containerRef={appContentRef} className="home-smart-scene" label="Smart writing start" chapter="01 / START">
+          <section className="smart-start-panel">
+            <div className="smart-start-copy">
+              <span className="eyebrow">SMART START</span>
+              <KineticHeading>What do you need to say today?</KineticHeading>
+              <p>Choose an intention or begin with your own words. PhraseAI will keep the message clear without sanding away your voice.</p>
+              <div className="smart-intent-grid">
+                {quickIntents.map((intent, index) => (
+                  <motion.button
+                    type="button"
+                    key={intent.label}
+                    onClick={() => beginIntent(intent)}
+                    initial={{ opacity: 0, y: 24, rotate: index % 2 ? 2 : -2 }}
+                    whileInView={{ opacity: 1, y: 0, rotate: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5, delay: index * 0.07, ease: AUTH_EASE_OUT }}
+                    whileHover={{ y: -4, rotate: index % 2 ? 0.6 : -0.6 }}
+                    whileTap={APP_BUTTON_TAP}
+                  >
+                    <span>0{index + 1}</span><strong>{intent.label}</strong><small>{intent.note}</small><ArrowIcon />
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+
+            <motion.aside className="smart-voice-panel" initial={{ opacity: 0, x: 40 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.65, ease: AUTH_EASE_OUT }}>
+              <div className="smart-voice-heading">
+                <div><span className="eyebrow">YOUR VOICE TODAY</span><h3>{homePersona}</h3></div>
+                <CompletenessRing value={styleData.styleStrength} label="defined" />
+              </div>
+              <div className="smart-signal-row">
+                <span><b>{homeStrength}%</b> profile strength</span>
+                <span><b>{styleData.emailsAnalyzed || styleData.emailHistory.length}</b> emails learned</span>
+              </div>
+              <div className="smart-learning-note"><SparkleIcon /><p>PhraseAI is currently learning <strong>{titleCase(learnedSignal)}</strong> from your approved rewrites.</p></div>
+              {recentOriginal ? (
+                <button type="button" className="smart-continue" onClick={() => beginIntent({ draft: recentOriginal, mode })}>
+                  <span><small>CONTINUE RECENT</small><strong>{recentOriginal}</strong></span><ArrowIcon />
+                </button>
+              ) : (
+                <div className="smart-empty-note"><span>First session</span><p>Your recent work and learning signals will appear here after your first approved rewrite.</p></div>
+              )}
+            </motion.aside>
+          </section>
+        </ScrollScene>
+
+        <ScrollMarquee containerRef={appContentRef} items={["Choose intent", "Write naturally", "Refine clearly", "Teach your voice"]} />
+
+        <ScrollScene containerRef={appContentRef} className="home-composer-scene" label="Email rewrite workspace" chapter="02 / COMPOSE">
       <div className="composer-workspace">
         <motion.section className="composer-panel input-panel" whileHover={APP_PANEL_HOVER}>
           <div className="panel-heading">
@@ -2396,6 +2474,8 @@ function App() {
           </div>
         </motion.section>
       </div>
+        </ScrollScene>
+      </div>
     );
   }
 
@@ -2483,7 +2563,8 @@ function App() {
   function renderSettings() {
     return (
       <div className="product-page settings-page">
-        <motion.section className="product-page-hero" variants={STYLE_SECTION_MOTION} initial="hidden" animate="visible">
+        <ScrollScene containerRef={appContentRef} className="utility-cinematic-scene" label="Workspace preferences" chapter="01 / PREFERENCES">
+        <motion.section className="product-page-hero" variants={STYLE_SECTION_MOTION} initial="hidden" whileInView="visible" viewport={STYLE_SECTION_VIEWPORT}>
           <motion.div variants={STYLE_ITEM_MOTION}>
             <span className="eyebrow">PERSONAL WORKSPACE</span>
             <h2>Make PhraseAI feel like yours.</h2>
@@ -2495,9 +2576,10 @@ function App() {
             <strong>{titleCase(theme)} mode</strong>
           </motion.div>
         </motion.section>
+        </ScrollScene>
 
-        <div className="product-page-grid">
-          <motion.section className="preference-panel preference-panel-wide" {...APP_SECTION_MOTION}>
+        <StyleSection className="product-page-grid utility-control-grid">
+          <motion.section className="preference-panel preference-panel-wide" variants={UTILITY_CARD_MOTION}>
             <div className="preference-heading"><span>01</span><div><h3>Appearance</h3><p>Set the visual tone of your writing environment.</p></div></div>
             <div className="theme-choice-grid">
               {[{ key: "dark", label: "Midnight", description: "Focused, cinematic, high contrast." }, { key: "light", label: "Paper", description: "Bright, calm, editorial clarity." }].map((item) => {
@@ -2513,7 +2595,7 @@ function App() {
             </div>
           </motion.section>
 
-          <motion.section className="preference-panel" {...APP_SECTION_MOTION}>
+          <motion.section className="preference-panel" variants={UTILITY_CARD_MOTION}>
             <div className="preference-heading"><span>02</span><div><h3>Default rewrite</h3><p>Choose the goal waiting on your next draft.</p></div></div>
             <div className="default-mode-list">
               {MODES.map((item) => (
@@ -2524,13 +2606,13 @@ function App() {
             </div>
           </motion.section>
 
-          <motion.section className="preference-panel privacy-panel" {...APP_SECTION_MOTION}>
+          <motion.section className="preference-panel privacy-panel" variants={UTILITY_CARD_MOTION}>
             <div className="privacy-mark"><CheckIcon /></div>
             <span className="eyebrow">PRIVATE BY DESIGN</span>
             <h3>Your profile stays attached to your account.</h3>
             <p>History, feedback, and learned writing signals remain isolated to your authenticated workspace.</p>
           </motion.section>
-        </div>
+        </StyleSection>
       </div>
     );
   }
@@ -2926,25 +3008,27 @@ function App() {
 
     return (
       <div className="product-page account-page">
-        <motion.section className="account-hero" variants={STYLE_SECTION_MOTION} initial="hidden" animate="visible">
+        <ScrollScene containerRef={appContentRef} className="utility-cinematic-scene" label="Account identity" chapter="01 / IDENTITY">
+        <motion.section className="account-hero" variants={STYLE_SECTION_MOTION} initial="hidden" whileInView="visible" viewport={STYLE_SECTION_VIEWPORT}>
           <motion.div className="account-hero-avatar" variants={STYLE_ITEM_MOTION}>{accountInitials}</motion.div>
           <motion.div variants={STYLE_ITEM_MOTION}><span className="eyebrow">PHRASEAI MEMBER</span><h2>{metadata.full_name || metadata.name || session?.user?.email?.split("@")[0] || "Your account"}</h2><p>{session?.user?.email || "Email unavailable"}</p></motion.div>
           <motion.span className="account-status" variants={STYLE_ITEM_MOTION}><i /> Secure session</motion.span>
         </motion.section>
+        </ScrollScene>
 
-        <div className="account-detail-grid">
-          <motion.section className="account-detail-card" {...APP_SECTION_MOTION}><span>EMAIL ADDRESS</span><strong>{session?.user?.email || "Unknown"}</strong><p>Used for secure access and account recovery.</p></motion.section>
-          <motion.section className="account-detail-card" {...APP_SECTION_MOTION}><span>MEMBER SINCE</span><strong>{accountCreated}</strong><p>Your writing profile has been evolving since this date.</p></motion.section>
-          <motion.section className="account-detail-card account-id-card" {...APP_SECTION_MOTION}><span>ACCOUNT ID</span><strong>{session?.user?.id || "Unavailable"}</strong><p>A private identifier used to isolate your PhraseAI data.</p></motion.section>
-        </div>
+        <StyleSection className="account-detail-grid utility-control-grid">
+          <motion.section className="account-detail-card" variants={UTILITY_CARD_MOTION}><span>EMAIL ADDRESS</span><strong>{session?.user?.email || "Unknown"}</strong><p>Used for secure access and account recovery.</p></motion.section>
+          <motion.section className="account-detail-card" variants={UTILITY_CARD_MOTION}><span>MEMBER SINCE</span><strong>{accountCreated}</strong><p>Your writing profile has been evolving since this date.</p></motion.section>
+          <motion.section className="account-detail-card account-id-card" variants={UTILITY_CARD_MOTION}><span>ACCOUNT ID</span><strong>{session?.user?.id || "Unavailable"}</strong><p>A private identifier used to isolate your PhraseAI data.</p></motion.section>
+        </StyleSection>
 
-        <motion.section className="account-actions-panel" {...APP_SECTION_MOTION}>
+        <StyleSection className="account-actions-panel">
           <div><span className="eyebrow">SESSION CONTROL</span><h3>You are signed in securely.</h3><p>Return to your workspace or end this session on the current device.</p></div>
           <div className="account-actions">
             <button type="button" className="secondary-button" onClick={() => setActiveSection("home")}>Back to Workspace</button>
             <button type="button" className="account-signout" onClick={handleSignOut}>Sign out</button>
           </div>
-        </motion.section>
+        </StyleSection>
       </div>
     );
   }
