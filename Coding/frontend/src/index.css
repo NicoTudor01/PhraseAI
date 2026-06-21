@@ -354,6 +354,57 @@ a:focus-visible {
   filter: blur(2px);
 }
 
+.landing-orbit-accent {
+  position: absolute;
+  z-index: 1;
+  top: 16%;
+  right: 10%;
+  width: 92px;
+  height: 92px;
+  pointer-events: none;
+  border: 1px solid rgba(103, 217, 163, 0.2);
+  border-radius: 50%;
+  transform-origin: center;
+}
+
+.landing-orbit-accent::before,
+.landing-orbit-accent::after,
+.landing-orbit-accent i {
+  position: absolute;
+  content: "";
+  border-radius: 50%;
+}
+
+.landing-orbit-accent::before {
+  inset: 14px;
+  border: 1px solid rgba(103, 217, 163, 0.1);
+}
+
+.landing-orbit-accent::after {
+  top: -4px;
+  left: 42px;
+  width: 8px;
+  height: 8px;
+  background: #67d9a3;
+  box-shadow: 0 0 22px rgba(103, 217, 163, 0.75);
+}
+
+.landing-orbit-accent i:first-child {
+  top: 21px;
+  right: 7px;
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.landing-orbit-accent i:last-child {
+  bottom: 11px;
+  left: 12px;
+  width: 5px;
+  height: 5px;
+  background: rgba(103, 217, 163, 0.45);
+}
+
 .auth-story::before {
   top: 13%;
   right: 9%;
@@ -415,7 +466,6 @@ a:focus-visible {
 .landing-word-mask > span {
   display: inline-block;
   transform-origin: left bottom;
-  will-change: transform;
 }
 
 .auth-copy > p {
@@ -954,6 +1004,8 @@ a:focus-visible {
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 20px;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
   transition: transform 240ms ease, border-color 240ms ease, background 240ms ease;
 }
 
@@ -1050,7 +1102,6 @@ a:focus-visible {
   padding: 25px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09);
   transform-origin: left center;
-  will-change: transform, opacity;
 }
 
 .auth-how-steps small {
@@ -1102,6 +1153,8 @@ a:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
 }
 
 .auth-demo-topbar,
@@ -1231,7 +1284,6 @@ a:focus-visible {
   font-size: 14px;
   line-height: 1.6;
   transform-origin: left center;
-  will-change: transform, opacity;
 }
 
 .auth-difference-points svg {

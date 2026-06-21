@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { AnimatePresence, motion, useScroll, useSpring, useTransform } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion, useScroll, useSpring, useTransform } from "framer-motion";
 import { validateRewriteResponse } from "./rewriteResponse";
 
 // ARCHITECT: [RECOMMENDED PATTERN] Production uses the same-origin Vercel proxy, avoiding CORS as a rewrite dependency.
@@ -18,11 +18,6 @@ const API_TIMEOUT_MS = 65000;
 // SCROLL-ANIM: Shared curves and timings keep the login choreography native to the existing UI.
 const AUTH_EASE_OUT = [0.16, 1, 0.3, 1];
 const AUTH_EASE_IN_OUT = [0.65, 0, 0.35, 1];
-const AUTH_SCROLL_INPUT = [0, 620];
-// SCROLL-ANIM: Normal flow moves at 1x; these transforms offset it to net 0.4x and 0.6x speeds.
-const AUTH_BACKGROUND_SCROLL_OUTPUT = [0, 250];
-const AUTH_CARDS_SCROLL_OUTPUT = [0, -145];
-const AUTH_SCROLL_SPRING = { stiffness: 86, damping: 24, mass: 0.72, restDelta: 0.001 };
 // SCROLL-ANIM: Main app uses a slightly softer spring so dashboard sections feel pulled rather than snapped.
 const APP_SCROLL_SPRING = { stiffness: 72, damping: 26, mass: 0.85, restDelta: 0.001 };
 const STYLE_SCROLL_INPUT = [0, 900];
@@ -45,13 +40,6 @@ const APP_AMBIENT_Y_OUTPUT = [0, -210];
 const APP_AMBIENT_ROTATE_OUTPUT = [-5, 9];
 const APP_HEADER_Y_OUTPUT = [0, -9];
 const APP_HEADER_OPACITY_OUTPUT = [1, 0.9];
-const AUTH_PULL_SCROLL_INPUT = [0, 760];
-const AUTH_HERO_SCALE_OUTPUT = [1, 0.9];
-const AUTH_HERO_OPACITY_OUTPUT = [1, 0.3];
-const AUTH_HERO_Y_OUTPUT = [0, -92];
-const AUTH_DETAILS_PULL_OUTPUT = [180, 0];
-const AUTH_DETAILS_SCALE_OUTPUT = [0.88, 1];
-const AUTH_DETAILS_ROTATE_OUTPUT = [-3.5, 0];
 const AUTH_SUCCESS_REDIRECT_MS = 980;
 const AUTH_ERROR_DISMISS_MS = 4000;
 const AUTH_BACKGROUND_MOTION = {
@@ -128,14 +116,6 @@ const AUTH_BUTTON_TAP = {
   y: 0,
   boxShadow: "0 5px 14px rgba(23, 25, 34, 0.14)",
   transition: { duration: 0.16, ease: AUTH_EASE_OUT },
-};
-const AUTH_DETAILS_SEQUENCE = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.12 } },
-};
-const AUTH_DETAILS_ITEM = {
-  hidden: { opacity: 0, y: 26 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.58, ease: AUTH_EASE_OUT } },
 };
 const APP_SIDEBAR_MOTION = {
   initial: { opacity: 0, x: -18 },
@@ -253,15 +233,24 @@ function useLandingScrollAnimations(enabled) {
           y: 22,
           scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "+=220", scrub: 0.6 },
         });
-        gsap.to(".auth-floating-cards-entrance", {
-          yPercent: -17,
-          scale: 1.045,
-          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "bottom top", scrub: 1.1 },
+        gsap.to(".auth-layout", {
+          y: -92,
+          scale: 0.9,
+          autoAlpha: 0.3,
+          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "+=760", scrub: 0.8 },
         });
-        gsap.to(".auth-preview", {
-          yPercent: -10,
-          scale: 1.035,
-          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "bottom top", scrub: 1.3 },
+        gsap.to(".auth-story", {
+          y: 250,
+          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "+=620", scrub: true },
+        });
+        gsap.to(".auth-floating-cards", {
+          y: -145,
+          scale: 1.045,
+          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "+=620", scrub: true },
+        });
+        gsap.to(".landing-orbit-accent", {
+          rotate: 360,
+          scrollTrigger: { trigger: ".auth-hero-stage", start: "top top", end: "bottom top", scrub: true },
         });
 
         gsap.utils.toArray(".landing-split-heading").forEach((heading) => {
@@ -278,14 +267,22 @@ function useLandingScrollAnimations(enabled) {
           );
         });
 
+        const purposeCards = gsap.utils.toArray(".auth-purpose-card");
         gsap.fromTo(
-          ".auth-purpose-card",
-          { autoAlpha: 0, y: 90, scale: 0.91, rotateX: 7 },
+          purposeCards,
+          {
+            autoAlpha: 0,
+            y: 96,
+            scale: 0.9,
+            rotateX: (index) => 12 + index * 2,
+            rotateY: (index) => (index - 1) * 9,
+          },
           {
             autoAlpha: 1,
             y: 0,
             scale: 1,
             rotateX: 0,
+            rotateY: 0,
             stagger: 0.12,
             ease: "power3.out",
             scrollTrigger: { trigger: ".auth-purpose-grid", start: "top 82%", end: "center 55%", scrub: 0.75 },
@@ -309,7 +306,7 @@ function useLandingScrollAnimations(enabled) {
             });
             howTimeline
               .fromTo(".auth-how-copy", { y: 54, autoAlpha: 0.35 }, { y: 0, autoAlpha: 1, duration: 0.32 })
-              .fromTo(".auth-how-demo", { y: 36, autoAlpha: 0, scale: 0.96 }, { y: 0, autoAlpha: 1, scale: 1, duration: 0.32 }, "<0.12")
+              .fromTo(".auth-how-demo", { y: 36, autoAlpha: 0, scale: 0.94, rotateY: -5 }, { y: 0, autoAlpha: 1, scale: 1, rotateY: 0, duration: 0.32 }, "<0.12")
               .fromTo(".auth-demo-flow", { scaleX: 0 }, { scaleX: 1, duration: 0.22, ease: "power2.out" })
               .fromTo(".auth-demo-refined", { clipPath: "inset(0 100% 0 0)", autoAlpha: 0.4 }, { clipPath: "inset(0 0% 0 0)", autoAlpha: 1, duration: 0.42 })
               .fromTo(".auth-demo-traits span", { y: 12, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.06, duration: 0.24 });
@@ -320,21 +317,23 @@ function useLandingScrollAnimations(enabled) {
                 .to(step, { x: 0, duration: 0.2 });
             });
 
-            const differencePoints = gsap.utils.toArray(".auth-difference-points p");
-            const differenceTimeline = gsap.timeline({
+            gsap.fromTo(".auth-difference-points p", {
+              autoAlpha: 0,
+              y: 42,
+              rotate: -8,
+            }, {
+              autoAlpha: 1,
+              y: 0,
+              rotate: 0,
+              stagger: 0.14,
+              ease: "power3.out",
               scrollTrigger: {
-                trigger: ".auth-difference",
+                trigger: ".auth-difference-points",
                 start: "top 82%",
-                end: "center 46%",
+                end: "bottom 52%",
                 scrub: 0.75,
                 invalidateOnRefresh: true,
               },
-            });
-            differenceTimeline
-              .fromTo(".auth-difference", { y: 88, scale: 0.955 }, { y: 0, scale: 1, duration: 0.48, ease: "power2.out" })
-              .fromTo(".auth-difference h2", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.5 }, "<0.08");
-            differencePoints.forEach((point) => {
-              differenceTimeline.fromTo(point, { autoAlpha: 0.18, x: 42 }, { autoAlpha: 1, x: 0, duration: 0.32, ease: "power2.out" });
             });
           },
           "(max-width: 760px)": () => {
@@ -350,12 +349,12 @@ function useLandingScrollAnimations(enabled) {
           },
         });
 
-        gsap.fromTo(".auth-details-cta", { autoAlpha: 0.3, y: 80, scale: 0.95 }, {
+        gsap.fromTo(".landing-footer > *", { autoAlpha: 0, y: 16 }, {
           autoAlpha: 1,
           y: 0,
-          scale: 1,
-          ease: "power3.out",
-          scrollTrigger: { trigger: ".auth-details-cta", start: "top 92%", end: "top 55%", scrub: 0.8 },
+          stagger: 0.08,
+          ease: "power2.out",
+          scrollTrigger: { trigger: ".landing-footer", start: "top 96%", end: "top 80%", scrub: 0.5 },
         });
 
       }, root);
@@ -373,7 +372,8 @@ function useLandingScrollAnimations(enabled) {
         });
 
         media.add("(prefers-reduced-motion: reduce)", () => {
-          gsap.set(root.querySelectorAll(".landing-hero-word > span, .landing-word-mask > span, .auth-purpose-card"), { clearProps: "all" });
+          gsap.set(root.querySelectorAll(".landing-hero-word > span, .landing-word-mask > span, .auth-purpose-card, .auth-how-demo, .auth-demo-refined, .auth-demo-traits span, .auth-how-steps li, .auth-difference-points p, .landing-footer > *"), { clearProps: "all" });
+          gsap.fromTo(root, { autoAlpha: 0.94 }, { autoAlpha: 1, duration: 0.2, ease: "power1.out" });
         });
 
         teardown = () => media.revert();
@@ -1098,17 +1098,6 @@ function App() {
   const authErrorTimerRef = useRef(null);
   const appContentRef = useRef(null);
   // SCROLL-ANIM: A damped scroll signal keeps trackpad and wheel movement fluid without delaying intent.
-  const { scrollY: authScrollY } = useScroll();
-  const smoothAuthScrollY = useSpring(authScrollY, AUTH_SCROLL_SPRING);
-  const authBackgroundY = useTransform(smoothAuthScrollY, AUTH_SCROLL_INPUT, AUTH_BACKGROUND_SCROLL_OUTPUT);
-  const authCardsY = useTransform(smoothAuthScrollY, AUTH_SCROLL_INPUT, AUTH_CARDS_SCROLL_OUTPUT);
-  // SCROLL-ANIM: The full hero yields while the details surface rises, creating one continuous pulling gesture.
-  const authHeroScale = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_HERO_SCALE_OUTPUT);
-  const authHeroOpacity = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_HERO_OPACITY_OUTPUT);
-  const authHeroY = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_HERO_Y_OUTPUT);
-  const authDetailsY = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_PULL_OUTPUT);
-  const authDetailsScale = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_SCALE_OUTPUT);
-  const authDetailsRotate = useTransform(smoothAuthScrollY, AUTH_PULL_SCROLL_INPUT, AUTH_DETAILS_ROTATE_OUTPUT);
   // SCROLL-ANIM: Track the app scroll container directly so protected pages get the same layered pull as login.
   const { scrollY: appScrollY, scrollYProgress: appScrollProgress } = useScroll({ container: appContentRef });
   const smoothAppScrollY = useSpring(appScrollY, APP_SCROLL_SPRING);
@@ -1803,6 +1792,7 @@ function App() {
 
   if (!session?.access_token || isPasswordRecovery) {
     return (
+      <MotionConfig reducedMotion="user">
       <div
         className="auth-page"
         ref={landingRef}
@@ -1851,13 +1841,12 @@ function App() {
         <div className="auth-hero-stage">
           <motion.main
             className="auth-layout"
-            style={{ scale: authHeroScale, opacity: authHeroOpacity, y: authHeroY }}
           >
           <motion.section
             className="auth-story"
-            style={{ y: authBackgroundY }}
             {...AUTH_BACKGROUND_MOTION}
           >
+            <span className="landing-orbit-accent" aria-hidden="true"><i /><i /></span>
             {/* SCROLL-ANIM: Left-panel children enter in a deliberate headline-to-product sequence. */}
             <div className="auth-copy">
               <span className="eyebrow">YOUR VOICE, REFINED</span>
@@ -1877,7 +1866,7 @@ function App() {
             </div>
 
             {/* SCROLL-ANIM: Cards enter after the copy and retain their own 0.6x parallax layer. */}
-            <motion.div className="auth-floating-cards" aria-hidden="true" style={{ y: authCardsY }}>
+            <motion.div className="auth-floating-cards" aria-hidden="true">
               <motion.div
                 className="auth-floating-cards-entrance"
                 variants={AUTH_CARDS_ENTRANCE}
@@ -2215,6 +2204,7 @@ function App() {
           </div>
         </section>
       </div>
+      </MotionConfig>
     );
   }
 
