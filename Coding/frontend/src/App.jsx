@@ -397,6 +397,32 @@ const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, 
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 }) : null;
 
+// FIX: If the auth server is unreachable (paused Supabase project, network outage), supabase-js keeps
+// retrying the stored-session refresh and getSession() never settles, so the app would stay on the
+// "Loading session..." screen forever. Bound the bootstrap and fall back to the login screen instead.
+const SESSION_BOOTSTRAP_TIMEOUT_MS = 6000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+}
+
+function clearStoredSupabaseSession() {
+  try {
+    const keys = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (key && key.startsWith("sb-") && key.includes("auth-token")) keys.push(key);
+    }
+    keys.forEach((key) => window.localStorage.removeItem(key));
+  } catch {
+    // Storage may be unavailable (private mode, blocked storage); nothing else to clean up.
+  }
+}
+
 class ApiRequestError extends Error {
   constructor(message, { status = 0, stage = "unknown", requestId = "" } = {}) {
     super(message);
@@ -1220,7 +1246,11 @@ function App() {
       }
 
       try {
-        const { data, error: sessionError } = await supabase.auth.getSession();
+        const { data, error: sessionError } = await withTimeout(
+          supabase.auth.getSession(),
+          SESSION_BOOTSTRAP_TIMEOUT_MS,
+          "Session restore",
+        );
         if (!mounted) return;
 
         if (sessionError) {
@@ -1230,10 +1260,12 @@ function App() {
         // FIXED: session persistence
         setSession(data.session || null);
       } catch {
-        // INSPECTOR: [SILENT CATCH] Auth bootstrap failures now resolve to the login screen instead of hanging forever.
+        // FIX: A stored session that cannot be refreshed is discarded so the next load does not hang again,
+        // and the user lands on the login screen with a clear message instead of an endless loader.
+        clearStoredSupabaseSession();
         if (mounted) {
           setSession(null);
-          setAuthError("Could not connect to authentication. Please refresh and try again.");
+          setAuthError("We couldn't restore your previous session. Please sign in again.");
         }
       } finally {
         if (mounted) setAuthReady(true);
