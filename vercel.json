@@ -3,10 +3,15 @@
   "installCommand": "npm --prefix Coding/frontend install",
   "buildCommand": "npm --prefix Coding/frontend run build",
   "outputDirectory": "Coding/frontend/dist",
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://phraseai-production.up.railway.app/$1"
+      "destination": "/api/index"
     }
   ]
 }
